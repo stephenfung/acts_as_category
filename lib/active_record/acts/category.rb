@@ -18,46 +18,33 @@ module ActiveRecord
       #######################
       
       module ClassMethods
-        # Needs columns: +ancestors_count+, +descendants_count+, +children_count+
+        # Please refer to README for more information about this plugin.
         #
-        # Please note that parent_id will not be validated on "update" and "update_attribute", so don't use either
-        #
-        # Methods which will respect the hidden functionality:
-        #
-        #  Category.get(id)       as a replacement for find(id)
-        #           root
-        #           roots
-        #
-        #      self.children
-        #           children.size
-        #           children.empty?
-        #           children_ids
-        #           descendants
-        #           descendants_ids
-        #           siblings
-        #           self_and_siblings
-        #
-        # Q:: Why is *find* not respecting hidden?
-        # A:: I didn't feel comfortable overwriting the find method for Categories and it is not really needed.
-        #
-        # Q:: Why are *ancestors*, *ancestors_ids* and <b>self.parent</b> not respecting hidden?
-        # A:: Because the whole idea of hidden is to exclude descendants of an hidden Category as well, thus the ancestors will never be hidden.
-        #
+        # create_table :category do |t|
+        #   t.column :parent_id,         :integer
+        #   t.column :position,          :integer
+        #   t.column :hidden,            :boolean
+        #   t.column :children_count,    :integer
+        #   t.column :ancestors_count,   :integer
+        #   t.column :descendants_count, :integer
+        # end
         #
         # Configuration options are:
         #
         # * <tt>foreign_key</tt> - specifies the column name to use for tracking of the tree (default: +parent_id+)
-        # * <tt>position</tt> - specifies the integer column name to use for ordering categories (default: +position+)
-        # * <tt>order</tt> - specifies a column name to use for ordering children and root(s) (default: +position+)
+        # * <tt>position</tt> - specifies the integer column name to use for ordering siblings (default: +position+)
+        # * <tt>children_count</tt> - specifies a column name to use for caching number of children (default: +children_count+)
+        # * <tt>ancestors_count</tt> - specifies a column name to use for caching number of ancestors (default: +ancestors_count+)
+        # * <tt>descendants_count</tt> - specifies a column name to use for caching number of descendants (default: +descendants_count+)
         def acts_as_category(options = {})
     
           # Load parameters whenever acts_as_category is called
-          configuration = { :foreign_key => "parent_id", :position => "position", :order => "position", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count' }
+          configuration = { :foreign_key => "parent_id", :position => "position", :hidden => "hidden", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count' }
           configuration.update(options) if options.is_a?(Hash)
           
           # Create a class association to itself
           belongs_to :parent, :class_name => name, :foreign_key => configuration[:foreign_key], :counter_cache => configuration[:children_count]
-          has_many :children, :class_name => name, :foreign_key => configuration[:foreign_key], :order => configuration[:order], :dependent => :destroy
+          has_many :children, :class_name => name, :foreign_key => configuration[:foreign_key], :order => configuration[:position], :dependent => :destroy
 
           # Substantial validations
           before_validation :validate_foreign_key
@@ -73,35 +60,29 @@ module ActiveRecord
           after_destroy :refresh_cache_after_destroy
 
           # Add readonly attribute to cache columns
-          attr_readonly configuration[:ancestors_count] if column_names.include? configuration[:ancestors_count]
+          # Note that children_count is automatically readonly
+          attr_readonly configuration[:ancestors_count]   if column_names.include? configuration[:ancestors_count]
           attr_readonly configuration[:descendants_count] if column_names.include? configuration[:descendants_count]
 
           # Define class variables
-          class_variable_set :@@hidden, []
+          class_variable_set :@@permissions, []
           
           #################
           # Class methods #
           #################
 
-          # Returns an +array+ with +ids+ of all categories, which are to be hidden. Returns an empty +array+ if none.
-          # The idea is, to prevent users without given rights to see hidden categories. This is done by defining a class variable +hidden+ each time the user logs in (which is job of the controller, in case you would like to use this functionality).
-          def self.hidden
-            class_variable_get :@@hidden
+          # Returns an +array+ with +ids+ of categories, which are to be allowed to be seen, though they might be hidden. Returns an empty +array+ if none.
+          # The idea is, to define a class variable array +permissions+ each time the user logs in (which is job of the controller, in case you would like to use this functionality).
+          def self.permissions
+            class_variable_get :@@permissions
           end
-          
-          # Creates a WHERE clause for SQL statements, which causes hidden categories not to be included. Adds AND if parameter +true+ is given.
-          #
-          #  hidden_sql       #=> " id NOT IN (3,6,12) "
-          #  hidden_sql(true) #=> " AND id NOT IN (3,6,12) "
-          def self.hidden_sql(with_and = false)
-            hidden.size == 0 ? '' : "#{with_and ? ' AND' : ''} id NOT IN (#{hidden.join(',')}) "
-          end
-          
-          # Takes an +array+ of +ids+ of categories and defines these to be hidden. Note that it overwrites the array with each call, instead of adding further ids to it.
-          def self.hidden=(ids)
-            hidden = []
-            ids.each { |id| hidden << id.to_i if id.to_i > 0 } if ids.is_a?(Array)
-            class_variable_set :@@hidden, hidden.uniq
+      
+          # Takes an +array+ of +ids+ of categories and defines them to be permitted.
+          # Note that this overwrites the array with each call, instead of adding further ids to it.
+          def self.permissions=(ids)
+            permissions = []
+            ids.each { |id| permissions << id.to_i if id.to_i > 0 } if ids.is_a?(Array)
+            class_variable_set :@@permissions, permissions.uniq
           end
           
           # This class_eval contains methods which cannot be added wihtout having a concrete model.
@@ -126,22 +107,24 @@ module ActiveRecord
             def parent_id_column=(id) write_attribute('#{configuration[:foreign_key]}', id) end
             def position_column() '#{configuration[:position]}' end
             def position_column=(pos) write_attribute('#{configuration[:position]}', pos) end
+            def hidden_column() '#{configuration[:hidden]}' end
             def children_count_column() '#{configuration[:children_count]}' end
             def ancestors_count_column() '#{configuration[:ancestors_count]}' end
             def descendants_count_column() '#{configuration[:descendants_count]}' end
 
-            # Overwrite the children association method, so it will respect hidden categories
+            # Overwrite the children association method, so that it will respect permitted/hidden categories
+            # Note: If you ask about the children of a not-permitted category, the result will be an empty array in any case
             alias :orig_children :children
             def children
               result = orig_children
-              result.delete_if { |child| child.hidden? }
+              result.delete_if { |child| !child.permitted? }
               result
             end
 
             ###########################
             # Generated class methods #
             ###########################
-
+        
             # Update cache columns of a whole branch, which includes the given +category+ or its +id+.
             def self.refresh_cache_of_branch_with(category)
               category = find(category) unless category.instance_of?(self)   # possibly convert id into category
@@ -150,17 +133,29 @@ module ActiveRecord
               root.descendants.each { |d| d.refresh_cache }
             end
 
-            # Returns the +category+ to a given +id+. This is as a replacement for find(id), but it respects hidden categories.
-            def self.get(id)
-              find(:first, :conditions => 'id = ' + id.to_i.to_s + hidden_sql(true), :order => #{configuration[:order].nil? ? 'nil' : %Q{"#{configuration[:order]}"}})
+            # Creates a WHERE clause for SQL statements, which causes forbidden categories not to be included. Adds AND statement if parameter +true+ is given.
+            #  where_permitted       #=> " (NOT hidden OR id IN (1,2,3)) "
+            #  where_permitted       #=> " (NOT hidden) " # whenver @@permissions is empty
+            #  where_permitted(true) #=> " AND (NOT hidden OR id IN (1,2,3)) "
+            #  where_permitted(true) #=> " AND (NOT hidden) " # whenver @@permissions is empty
+            def self.where_permitted(with_and = false)
+              id_addon = (class_variable_get :@@permissions).size == 0 ? '' : " OR id IN (\#{(class_variable_get :@@permissions).join(',')})"
+              "\#{with_and ? ' AND' : ''} (#{configuration[:hidden]} IS NULL\#{id_addon}) "
             end
             
-            # Returns all root +categories+
-            def self.roots
-              find(:all, :conditions => '#{configuration[:foreign_key]} IS NULL' + hidden_sql(true), :order => #{configuration[:order].nil? ? 'nil' : %Q{"#{configuration[:order]}"}})
+            # Returns the +category+ to a given +id+. This is as a replacement for find(id), but it respects permitted/hidden categories.
+            def self.get(id)
+              find(:first, :conditions => 'id = ' + id.to_i.to_s + where_permitted(true), :order => #{configuration[:position].nil? ? 'nil' : %Q{"#{configuration[:position]}"}})
+            end
+            
+            # Returns all root +categories+, respecting permitted/hidden ones
+            def self.roots(ignore_permissions = false)
+              where_clause = ignore_permissions ? '' : where_permitted(true)
+              find(:all, :conditions => '#{configuration[:foreign_key]} IS NULL' + where_clause, :order => #{configuration[:position].nil? ? 'nil' : %Q{"#{configuration[:position]}"}})
             end
          
-            # Receives the controller's +params+ variable and updates category positions accordingly. Please refer to the helper methods that came with this model for further information.
+            # Receives the controller's +params+ variable and updates category positions accordingly.
+            # Please refer to the helper methods that came with this model for further information.
             def self.update_positions(params)
               params.each_key { |key|
                 if key.include?('sortable_categories_')
@@ -196,26 +191,32 @@ module ActiveRecord
         # Instance methods #
         ####################
 
-        # Returns +true+ if category is hidden, otherwise +false+.
-        def hidden?
-          self.class.hidden.empty? ? false : self.class.hidden.include?(self.id)
+        # Returns +true+ if category is visible/permitted, otherwise +false+.
+        def permitted?
+          return false if self.class.find(self.id).read_attribute(hidden_column) and !self.class.permissions.include?(self.id)          
+          node = self
+          while node.parent do
+            node = node.parent
+            return false if self.class.find(node.id).read_attribute(hidden_column) and !self.class.permissions.include?(node.id)
+          end
+          true
         end
 
-        # Returns +array+ of children's ids
+        # Returns +array+ of children's ids, respecting permitted/hidden categories
        	def children_ids
        	  children_ids = []
-          self.children.each { |child| children_ids << child.id unless child.hidden? } unless self.children.empty?
+          self.children.each { |child| children_ids << child.id if child.permitted? } unless self.children.empty?
           children_ids
         end
         
-        # Returns list of ancestors
+        # Returns list of ancestors, disregarding any permissions
         def ancestors
           node, nodes = self, []
           nodes << node = node.parent while node.parent
           nodes
         end
         
-        # Returns array of IDs of ancestors
+        # Returns array of IDs of ancestors, disregarding any permissions
        	def ancestors_ids
           node, nodes = self, []
           while node.parent
@@ -225,46 +226,46 @@ module ActiveRecord
           nodes
         end
 
-        # Returns list of descendants
+        # Returns list of descendants, respecting permitted/hidden categories
        	def descendants
        	  descendants = []
        	  self.children.each { |child|
-       	    descendants += [child] unless child.hidden?
+       	    descendants += [child] if child.permitted?
        	    descendants += child.descendants
        	  } unless self.children.empty?
        	  descendants 
        	end
        	
-       	# Returns array of IDs of descendants
-       	def descendants_ids
+       	# Returns array of IDs of descendants, respecting permitted/hidden categories
+       	def descendants_ids(ignore_permissions = false)
        	  descendants_ids = [] 
        	  self.children.each { |child|
-       	    descendants_ids += [child.id] unless child.hidden?
+       	    descendants_ids += [child.id] if ignore_permissions or child.permitted?
        	    descendants_ids += child.descendants_ids
        	  } unless self.children.empty?
        	  descendants_ids
        	end
        	
-        # Returns the root node of the branch.
+        # Returns the root node of the branch, disregarding any permissions
         def root
           node = self
           node = node.parent while node.parent
           node
         end
         
-        # Returns +true+ if category is root, otherwise +false+
+        # Returns +true+ if category is root, otherwise +false+, disregarding any permissions
         def root?
           self.parent ? false : true
         end
 
-        # Returns all siblings of the current node.
+        # Returns all siblings of the current node, respecting permitted/hidden categories
         def siblings
           result = self_and_siblings - [self]
-          result.delete_if { |sibling| sibling.hidden? }
+          result.delete_if { |sibling| !sibling.permitted? }
           result
         end
 
-        # Returns all siblings and a reference to the current node.
+        # Returns all siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings
           parent ? parent.children : self.class.roots
         end
@@ -289,7 +290,7 @@ module ActiveRecord
             # Parent must not be itself
             self.write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.id == self.read_attribute(parent_id_column) unless self.id.blank?
             # Parent must not be a descendant of itself
-            self.write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.descendants_ids.include?(self.read_attribute(parent_id_column))
+            self.write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.descendants_ids(true).include?(self.read_attribute(parent_id_column))
           end
           rescue ActiveRecord::RecordNotFound
           self.write_attribute(parent_id_column, 0) # Parent was not found
@@ -299,7 +300,7 @@ module ActiveRecord
         def assign_position
           # Position for new nodes is (number of siblings + 1), but only for new categories
           if read_attribute(parent_id_column).nil?
-            self.write_attribute(position_column, self.class.roots.size + 1)
+            self.write_attribute(position_column, self.class.roots(true).size + 1)
           else
             self.write_attribute(position_column, self.class.find(:all, :conditions => ["#{parent_id_column} = ?", self.read_attribute(parent_id_column)]).size + 1)
           end
@@ -310,7 +311,7 @@ module ActiveRecord
           self.class.refresh_cache_of_branch_with(self.root)
         end
         
-        # Gather parent_id before manipulation
+        # Gather parent_id before any manipulation
         def prepare_refresh_before_update
           @parent_id_before = self.class.find(self.id).read_attribute(parent_id_column)
         end

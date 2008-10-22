@@ -17,7 +17,7 @@ Let me explain to you what I mean by *acts_as_category*, which is yet another ac
 So I came up with *acts_as_category*, and this is what it does:
 - It provides a structure for infinite categories and their subcategories (similar to acts_as_tree)
 - It validates that no category will be the parent of its own descendant and all of these foreign key things
-- You can define (through a class variable) that certain categories should be hidden to the current user
+- You can define (through a class variable) which hidden categories should be permitted to the current user
 - There is a variety of instance methods such as ancestors, descendants, descendants_ids, root?, etc.
 - It has view helpers to create menus, select boxes, drag and drop ajax lists, etc.
 - It provides sorting by a position column, including admin methods that take parameters from the helpers
@@ -26,9 +26,9 @@ So I came up with *acts_as_category*, and this is what it does:
 - A full unit test comes along with it
 
 What can *acts_as_category* *not* do?
-- You can't simply turn of certain features it has, in order to speed up your application
+- You can't simply "turn off" certain features it has, in order to speed up your application (like permissions)
 - I consider it efficient code, though I am sure, here or there you could tweak it, so don't blame me ;)
-- ActiveRecord's find method won't respect hidden categories feature (but I provide alternative methods)
+- ActiveRecord's "find" method won't respect hidden categories feature (but I provide alternative methods!)
 - "update" and "update_attributes" must not be used to change the parent_id, because there is no validation callback
 - It can't make you a coffee
 
@@ -54,6 +54,7 @@ To make it work, you need a ActiveRecord Model, which provides certain table col
  create_table :categories do |t|
    t.column :parent_id,         :integer
    t.column :position,          :integer
+   t.column :hidden,            :boolean
    t.column :children_count,    :integer
    t.column :ancestors_count,   :integer
    t.column :descendants_count, :integer
@@ -124,57 +125,49 @@ Then you can run the following methods. For more specific information about retu
  subchild1.self_and_siblings
  Returns an array [subchild1, subchild2], just like siblings, only with itself as well
 
-=== Usage with "hidden"
+=== Usage with permissions
 
-Let's bring the *hidden* feature into the game. It let's you hide categories for certain users.
+Let's bring the *permissions* feature into the game. It let's you show categories for certain users, even though the categories might be flagged "hidden".
   
-  Category.hidden = [1,2,3]
-  This will hide the categories with the ids 1, 2 and 3 (say root1, child1, subchid2)
+  Category.permissions = [1, 2]
+  This will permit the categories with the id 1 and two (say root1, child1)
+  The idea is to set this class variable array whenever a user logs in e.g.
   
-  Category.hidden
+  Category.permissions
   Returns the array that you provided for hidden=...
   
-  root1.hidden?
-  Returns true, because root1 is a hidden categorie now.
+  child1.hidden = true
+  subchild1.hidden = true
+  Sets child1 and subchild1 to be hidden
   
-  Category.get(1)
-  Returns nil now, because root1, having the id 1, is hidden
+  root1.hidden?
+  Returns false, because root1 is visible
+  
+  child1.hidden?
+  Returns false, because child1 is hidden, BUT you have permissions!
+  
+  subchild1.hidden?
+  Returns true, because subchild1 is hidden and you have NO permission
   
   ...
   
-Note that you can still use find(1) to get hidden categories. So you should never use it unless you must. However, if you do have to use it, you can generate an SQL addition for your condition like so:
+Note that you can still use find(1) to get hidden categories. So you should never use it unless you really must. However, if you do have to use it, you can generate an SQL addition for your condition like so:
 
-  Category.find(:all, :condition => Category.excluded_sql, [... other options])
+  Category.find(:all, :condition => Category.where_permitted, [... other options])
 
 That will be considered: 
 
-  Category.find(:all, :condition => "id NOT IN (1,2,3)", [... e.g. other options here])
+  Category.find(:all, :condition => " (NOT hidden OR id IN (1,2,3)) ", [... e.g. other options here])
   
 If you use a SQL query, you can use the parameter _true_ to add an "AND":
 
-  Category.find(:all, :condition => "WHERE parent_id > 5" Category.excluded_sql(true))
+  Category.find(:all, :condition => "WHERE parent_id > 5" Category.where_permitted(true))
   
 Will be considered:
 
-   Category.find(:all, :condition => "WHERE parent_id > 5 AND id NOT IN (1,2,3))
+   Category.find(:all, :condition => "WHERE parent_id > 5 AND (NOT hidden OR id IN (1,2,3)))
 
-In general you can say, that these methods do respect the _hidden_ feature and will not let you access hidden categories:
-
-  Category.get(id)
-  Category.roots
-  Category.excluded
-  Category.excluded=
-  Category.excluded_sql
-
-  self.hidden?
-  self.children
-  self.children.size
-  self.children.empty?
-  self.children_ids
-  self.descendants
-  self.descendants_ids
-  self.siblings
-  self.self_and_siblings
+Please have a look at the comments for each function and the unit test to see, which method respects permissions and which one doesn't (e.g. ancestors)
   
 Q:: Why is _find_ not respecting hidden?
 A:: I didn't feel comfortable overwriting the find method for Categories and it is not really needed.
