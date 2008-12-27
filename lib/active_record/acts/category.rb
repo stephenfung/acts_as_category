@@ -10,36 +10,38 @@ module ActiveRecord
       def self.included(base)
         # Add class methods module of Acts::Category to the superior class ActiveRecord
         # In that module, the InstanceMethods will be added as well
-        base.extend(ClassMethods)
+        base.extend ClassMethods
       end
 
       #######################
       # ClassMethods module #
       #######################
       
-      module ClassMethods
+      module ClassMethods        
         # Please refer to README for more information about this plugin.
         #
-        # create_table :category do |t|
-        #   t.column :parent_id,         :integer
-        #   t.column :position,          :integer
-        #   t.column :hidden,            :boolean
-        #   t.column :children_count,    :integer
-        #   t.column :ancestors_count,   :integer
-        #   t.column :descendants_count, :integer
-        # end
+        #  create_table "categories", :force => true do |t|
+        #    t.integer "parent_id"
+        #    t.integer "position"
+        #    t.boolean "hidden"
+        #    t.integer "children_count"
+        #    t.integer "ancestors_count"
+        #    t.integer "descendants_count"
+        #  end
         #
         # Configuration options are:
         #
         # * <tt>foreign_key</tt> - specifies the column name to use for tracking of the tree (default: +parent_id+)
         # * <tt>position</tt> - specifies the integer column name to use for ordering siblings (default: +position+)
+        # * <tt>hidden</tt> - specifies a column name to use for hidden flag (default: +hidden+)
         # * <tt>children_count</tt> - specifies a column name to use for caching number of children (default: +children_count+)
         # * <tt>ancestors_count</tt> - specifies a column name to use for caching number of ancestors (default: +ancestors_count+)
         # * <tt>descendants_count</tt> - specifies a column name to use for caching number of descendants (default: +descendants_count+)
+        # * <tt>memoize</tt> - Should memoization be used in order to speed up performance? (default: +true+)
         def acts_as_category(options = {})
-    
+        
           # Load parameters whenever acts_as_category is called
-          configuration = { :foreign_key => "parent_id", :position => "position", :hidden => "hidden", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count' }
+          configuration = { :foreign_key => "parent_id", :position => "position", :hidden => "hidden", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count', :memoize => true }
           configuration.update(options) if options.is_a?(Hash)
           
           # Create a class association to itself
@@ -83,6 +85,7 @@ module ActiveRecord
             permissions = []
             ids.each { |id| permissions << id.to_i if id.to_i > 0 } if ids.is_a?(Array)
             class_variable_set :@@permissions, permissions.uniq
+            # TODO?: unmemoize_all if memoize?
           end
           
           # This class_eval contains methods which cannot be added wihtout having a concrete model.
@@ -92,17 +95,20 @@ module ActiveRecord
           # and not already when our plugin's init.rb adds our Acts::Category modules to ActiveRecord.
           # Another example is, that we want to overwrite the association method "children", but this
           # association doesn't exist before acts_as_category is actually called. So we need class_eval.
-
+ 
           class_eval <<-EOV
           
             ##############################
             # Generated instance methods #
             ##############################
           
+            # Make class methods memoizable
+            class << self; extend ActiveSupport::Memoizable if #{configuration[:memoize]}; end
+          
             # Include instance methods from our InstanceMethods module
             include ActiveRecord::Acts::Category::InstanceMethods
             
-            # Define instance getter and setter methods to keep track of the column name options
+            # Define instance getter and setter methods to keep track of the option parameters
             def parent_id_column() '#{configuration[:foreign_key]}' end
             def parent_id_column=(id) write_attribute('#{configuration[:foreign_key]}', id) end
             def position_column() '#{configuration[:position]}' end
@@ -111,6 +117,8 @@ module ActiveRecord
             def children_count_column() '#{configuration[:children_count]}' end
             def ancestors_count_column() '#{configuration[:ancestors_count]}' end
             def descendants_count_column() '#{configuration[:descendants_count]}' end
+            def self.memoize?() #{configuration[:memoize]} end
+            def memoize?() #{configuration[:memoize]} end
 
             # Overwrite the children association method, so that it will respect permitted/hidden categories
             # Note: If you ask about the children of a not-permitted category, the result will be an empty array in any case
@@ -124,13 +132,14 @@ module ActiveRecord
             ###########################
             # Generated class methods #
             ###########################
-        
+                
             # Update cache columns of a whole branch, which includes the given +category+ or its +id+.
             def self.refresh_cache_of_branch_with(category)
               category = find(category) unless category.instance_of?(self)   # possibly convert id into category
               root = category.#{configuration[:foreign_key]}.nil? ? category : category.root   # find root of category (if not already)
               root.refresh_cache
               root.descendants.each { |d| d.refresh_cache }
+              # TODO?: unmemoize_all if #{configuration[:memoize]}
             end
 
             # Creates a WHERE clause for SQL statements, which causes forbidden categories not to be included. Adds AND statement if parameter +true+ is given.
@@ -145,20 +154,21 @@ module ActiveRecord
             
             # Returns the +category+ to a given +id+. This is as a replacement for find(id), but it respects permitted/hidden categories.
             def self.get(id)
-              find(:first, :conditions => 'id = ' + id.to_i.to_s + where_permitted(true), :order => #{configuration[:position].nil? ? 'nil' : %Q{"#{configuration[:position]}"}})
+              find(:first, :conditions => 'id = ' + id.to_i.to_s + where_permitted(true))
             end
             
             # Returns all root +categories+, respecting permitted/hidden ones
+            # (Note: I tried to memoize this function, but it would not work correctly, so I let it be)
             def self.roots(ignore_permissions = false)
               where_clause = ignore_permissions ? '' : where_permitted(true)
               find(:all, :conditions => '#{configuration[:foreign_key]} IS NULL' + where_clause, :order => #{configuration[:position].nil? ? 'nil' : %Q{"#{configuration[:position]}"}})
             end
-         
+            
             # Receives the controller's +params+ variable and updates category positions accordingly.
             # Please refer to the helper methods that came with this model for further information.
             def self.update_positions(params)
               params.each_key { |key|
-                if key.include?('sortable_categories_')
+                if key.include?('aac_sortable_tree_')
                   parent_id = key.split('_').last.to_i
                   params[key].each_with_index { |id, position|
                     category = find(id)
@@ -187,6 +197,9 @@ module ActiveRecord
       
       module InstanceMethods
         
+        def self.memoize?() end # Dummy which is overwritten by class_eval
+        extend ActiveSupport::Memoizable if memoize?
+        
         ####################
         # Instance methods #
         ####################
@@ -201,6 +214,7 @@ module ActiveRecord
           end
           true
         end
+        memoize :permitted? if memoize?
 
         # Returns +array+ of children's ids, respecting permitted/hidden categories
        	def children_ids
@@ -208,14 +222,16 @@ module ActiveRecord
           self.children.each { |child| children_ids << child.id if child.permitted? } unless self.children.empty?
           children_ids
         end
-        
+        memoize :children_ids if memoize?
+
         # Returns list of ancestors, disregarding any permissions
         def ancestors
           node, nodes = self, []
           nodes << node = node.parent while node.parent
           nodes
         end
-        
+        memoize :ancestors if memoize?
+
         # Returns array of IDs of ancestors, disregarding any permissions
        	def ancestors_ids
           node, nodes = self, []
@@ -225,6 +241,7 @@ module ActiveRecord
           end
           nodes
         end
+        memoize :ancestors_ids if memoize?
 
         # Returns list of descendants, respecting permitted/hidden categories
        	def descendants
@@ -235,7 +252,8 @@ module ActiveRecord
        	  } unless self.children.empty?
        	  descendants 
        	end
-       	
+        memoize :descendants if memoize?
+
        	# Returns array of IDs of descendants, respecting permitted/hidden categories
        	def descendants_ids(ignore_permissions = false)
        	  descendants_ids = [] 
@@ -245,13 +263,15 @@ module ActiveRecord
        	  } unless self.children.empty?
        	  descendants_ids
        	end
-       	
+        memoize :descendants_ids if memoize?
+
         # Returns the root node of the branch, disregarding any permissions
         def root
           node = self
           node = node.parent while node.parent
           node
         end
+        memoize :root if memoize?
         
         # Returns +true+ if category is root, otherwise +false+, disregarding any permissions
         def root?
@@ -269,7 +289,7 @@ module ActiveRecord
         def self_and_siblings
           parent ? parent.children : self.class.roots
         end
-        
+
         # Immediately refresh cache of category instance
         def refresh_cache
           self.class.connection.execute "UPDATE #{self.class.table_name} SET #{ancestors_count_column}=#{self.ancestors.size},  #{descendants_count_column}=#{self.descendants.size} WHERE id=#{self.id}"

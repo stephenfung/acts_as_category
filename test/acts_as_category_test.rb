@@ -9,8 +9,10 @@
 # For further information see http://blog.funkensturm.de/ruby-on-rails-plugins
 
 require 'test/unit'
+
 require 'rubygems'
 require 'active_record'
+require 'action_view'
 
 ActiveRecord::Base.establish_connection(:adapter => "sqlite3", :dbfile => ":memory:")
 $stdout = StringIO.new # Prevent ActiveRecord's annoying schema statements
@@ -18,13 +20,13 @@ $stdout = StringIO.new # Prevent ActiveRecord's annoying schema statements
 def setup_db
   ActiveRecord::Base.logger
   ActiveRecord::Schema.define(:version => 1) do
-    create_table :categories do |t|
-      t.column :parent_id,         :integer
-      t.column :position,          :integer
-      t.column :hidden,            :boolean
-      t.column :children_count,    :integer
-      t.column :ancestors_count,   :integer
-      t.column :descendants_count, :integer
+    create_table "categories", :force => true do |t|
+      t.integer "my_parent_id"
+      t.integer "my_position"
+      t.boolean "my_hidden"
+      t.integer "my_children_count"
+      t.integer "my_ancestors_count"
+      t.integer "my_descendants_count"
     end
   end
 end
@@ -39,13 +41,18 @@ setup_db # Because the plugin needs an existing table before initialization (e.g
 
 $:.unshift File.dirname(__FILE__) + '/../lib' # make "lib" known to "require"
 require 'active_record/acts/category'
+require 'active_record/acts/category_content'
+require 'acts_as_category_helper'
 require File.dirname(__FILE__) + '/../init' # Initialize Plugin
 
-#class Mixin < ActiveRecord::Base 
-#end
-
 class Category < ActiveRecord::Base
-  acts_as_category
+  acts_as_category :foreign_key => 'my_parent_id',
+                   :position => 'my_position',
+                   :hidden => 'my_hidden',
+                   :children_count => 'my_children_count',
+                   :ancestors_count => 'my_ancestors_count',
+                   :descendants_count => 'my_descendants_count',
+                   :memoize => true
 end
 
 teardown_db # Because CategoryTest's setup method won't execute setup_db otherwise
@@ -64,12 +71,12 @@ class CategoryTest < Test::Unit::TestCase
     assert @r1   = Category.create! # id 1
     assert @r2   = Category.create! # id 2
     assert @r3   = Category.create! # id 3
-    assert @r11  = Category.create!(:parent_id => @r1.id) # id 4
-    assert @r21  = Category.create!(:parent_id => @r2.id) # id 5
-    assert @r22  = Category.create!(:parent_id => @r2.id) # id 6
-    assert @r111 = Category.create!(:parent_id => @r11.id) # id 7
-    assert @r211 = Category.create!(:parent_id => @r21.id) # id 8
-    assert @r221 = Category.create!(:parent_id => @r22.id) # id 9
+    assert @r11  = Category.create!(:my_parent_id => @r1.id) # id 4
+    assert @r21  = Category.create!(:my_parent_id => @r2.id) # id 5
+    assert @r22  = Category.create!(:my_parent_id => @r2.id) # id 6
+    assert @r111 = Category.create!(:my_parent_id => @r11.id) # id 7
+    assert @r211 = Category.create!(:my_parent_id => @r21.id) # id 8
+    assert @r221 = Category.create!(:my_parent_id => @r22.id) # id 9
     assert @r1   = Category.find(1)
     assert @r2   = Category.find(2)
     assert @r3   = Category.find(3)
@@ -89,9 +96,14 @@ class CategoryTest < Test::Unit::TestCase
   def check_cache # This is merely a method used by certain tests
     Category.find(:all).each { |c|
       # Note that "children_count" is a built-in Rails functionality and must not be tested here
-      assert_equal c.ancestors.size,   c.ancestors_count
-      assert_equal c.descendants.size, c.descendants_count
+      assert_equal c.ancestors.size,   c.my_ancestors_count
+      assert_equal c.descendants.size, c.my_descendants_count
     }
+  end
+  
+  def test_memoizabla_plugin_options_parameters
+    assert Category.memoize?
+    assert @r1.memoize?
   end
   
   def test_cache_columns
@@ -116,47 +128,47 @@ class CategoryTest < Test::Unit::TestCase
     Category.permissions.clear
     assert_equal [], Category.permissions
   end
-  
+
   def test_where_permitted_sql_query
-    assert_equal ' (hidden IS NULL) ', Category.where_permitted
-    assert_equal ' AND (hidden IS NULL) ', Category.where_permitted(true)
+    assert_equal ' (my_hidden IS NULL) ', Category.where_permitted
+    assert_equal ' AND (my_hidden IS NULL) ', Category.where_permitted(true)
     Category.permissions = [1,2,3]
-    assert_equal ' (hidden IS NULL OR id IN (1,2,3)) ', Category.where_permitted
-    assert_equal ' AND (hidden IS NULL OR id IN (1,2,3)) ', Category.where_permitted(true)
+    assert_equal ' (my_hidden IS NULL OR id IN (1,2,3)) ', Category.where_permitted
+    assert_equal ' AND (my_hidden IS NULL OR id IN (1,2,3)) ', Category.where_permitted(true)
   end
   
   def test_attr_readonly
-    assert @r1.children_count = 99
-    assert @r1.ancestors_count = 99
-    assert @r1.descendants_count = 99
+    assert @r1.my_children_count = 99
+    assert @r1.my_ancestors_count = 99
+    assert @r1.my_descendants_count = 99
     assert @r1.save
     assert @r1 = Category.find(1)
-    assert_nil @r1.children_count
-    assert_equal 0, @r1.ancestors_count
-    assert_equal 2, @r1.descendants_count
-    assert @r1.update_attribute('children_count', 99)
-    assert @r1.update_attribute('ancestors_count', 99)
-    assert @r1.update_attribute('descendants_count', 99)
+    assert_equal 1, @r1.my_children_count
+    assert_equal 0, @r1.my_ancestors_count
+    assert_equal 2, @r1.my_descendants_count
+    assert @r1.update_attribute('my_children_count', 99)
+    assert @r1.update_attribute('my_ancestors_count', 99)
+    assert @r1.update_attribute('my_descendants_count', 99)
     assert @r1 = Category.find(1)
-    assert_nil @r1.children_count
-    assert_equal 0, @r1.ancestors_count
-    assert_equal 2, @r1.descendants_count
+    assert_equal 1, @r1.my_children_count
+    assert_equal 0, @r1.my_ancestors_count
+    assert_equal 2, @r1.my_descendants_count
   end
 
   def test_permitted?
     assert @r3.permitted?
-    assert @r3.update_attribute('hidden', true)
+    assert @r3.update_attribute('my_hidden', true)
     assert !@r3.permitted?
     Category.permissions = [@r3.id]
     assert @r3.permitted?
     Category.permissions.clear
     assert !@r3.permitted?
-    assert @r3.update_attribute('hidden', false)
+    assert @r3.update_attribute('my_hidden', false)
     assert @r3.permitted?
     assert @r2.permitted?
     assert @r21.permitted?
     assert @r211.permitted?
-    assert @r211.update_attribute('hidden', true)
+    assert @r211.update_attribute('my_hidden', true)
     assert @r2.permitted?
     assert @r21.permitted?
     assert !@r211.permitted?
@@ -169,22 +181,22 @@ class CategoryTest < Test::Unit::TestCase
     assert @r2.permitted?
     assert @r21.permitted?
     assert !@r211.permitted?
-    assert @r211.update_attribute('hidden', false)
+    assert @r211.update_attribute('my_hidden', false)
     assert @r2.permitted?
     assert @r21.permitted?
     assert @r211.permitted?
-    assert @r21.update_attribute('hidden', true)
+    assert @r21.update_attribute('my_hidden', true)
     assert @r2.permitted?
     assert !@r21.permitted?
-    assert !@r211.hidden
+    assert !@r211.my_hidden
     assert !@r211.permitted?
     Category.permissions = [@r21.id]
     assert @r2.permitted?
     assert @r21.permitted?
     assert @r211.permitted?
     Category.permissions.clear
-    assert @r2.update_attribute('hidden', true)
-    assert @r21.update_attribute('hidden', false)
+    assert @r2.update_attribute('my_hidden', true)
+    assert @r21.update_attribute('my_hidden', false)
     assert !@r2.permitted?
     assert !@r21.permitted?
     assert !@r211.permitted?
@@ -211,7 +223,7 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_children_permissions
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal [@r21, @r22], @r2.orig_children
     assert_equal [@r11], @r1.children
     assert_equal [@r21], @r2.children
@@ -237,7 +249,7 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_children_ids_permissions
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal [4], @r1.children_ids
     assert_equal [5], @r2.children_ids
     assert_equal [], @r3.children_ids
@@ -259,8 +271,8 @@ class CategoryTest < Test::Unit::TestCase
      assert_equal 1, @r22.children.size
      assert_equal 0, @r211.children.size
      assert_equal 0, @r221.children.size
-     assert @r111.update_attribute('hidden', true)
-     assert @r22.update_attribute('hidden', true)
+     assert @r111.update_attribute('my_hidden', true)
+     assert @r22.update_attribute('my_hidden', true)
      assert_equal 1, @r1.children.size
      assert_equal 1, @r2.children.size
      assert_equal 0, @r3.children.size
@@ -321,7 +333,7 @@ class CategoryTest < Test::Unit::TestCase
   end
   
   def test_descendants_permissions
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal [@r11, @r111], @r1.descendants
     assert_equal [@r21, @r211], @r2.descendants
     assert_equal [], @r3.descendants
@@ -349,7 +361,7 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_descendants_ids_permissions
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal [4, 7], @r1.descendants_ids
     assert_equal [5, 8], @r2.descendants_ids
     assert_equal [], @r3.descendants_ids
@@ -373,7 +385,7 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_root_permissions # i. e. ignoring permissions
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal @r2, @r2.root
     assert_equal @r2, @r22.root
     assert_equal @r2, @r221.root
@@ -386,7 +398,7 @@ class CategoryTest < Test::Unit::TestCase
   end
   
   def test_root_permissions # i. e. ignoring permissions
-    assert @r3.update_attribute('hidden', true)
+    assert @r3.update_attribute('my_hidden', true)
     assert @r1.root?
     assert @r3.root?
     assert !@r11.root?
@@ -398,12 +410,12 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_roots_permissions
-    assert @r2.update_attribute('hidden', true)
+    assert @r2.update_attribute('my_hidden', true)
     assert_equal [@r1, @r3], Category.roots
   end
   
   def test_roots_permissions_override
-    assert @r2.update_attribute('hidden', true)
+    assert @r2.update_attribute('my_hidden', true)
     assert_equal [@r1, @r2, @r3], Category.roots(true)
   end
   
@@ -420,7 +432,7 @@ class CategoryTest < Test::Unit::TestCase
   end
   
   def test_siblings_permissions
-    assert @r2.update_attribute('hidden', true)
+    assert @r2.update_attribute('my_hidden', true)
     assert_equal [@r3], @r1.siblings
     assert_equal [@r1, @r3], @r2.siblings
     assert_equal [@r1], @r3.siblings
@@ -430,13 +442,13 @@ class CategoryTest < Test::Unit::TestCase
     assert_equal [], @r111.siblings
     assert_equal [], @r211.siblings
     assert_equal [], @r221.siblings
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal [], @r21.siblings
     assert_equal [], @r22.siblings
     assert_equal [], @r111.siblings
     assert_equal [], @r211.siblings
     assert_equal [], @r221.siblings
-    assert @r2.update_attribute('hidden', false)
+    assert @r2.update_attribute('my_hidden', false)
     assert_equal [], @r22.siblings
   end
   
@@ -453,7 +465,7 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_self_and_siblings_permissions
-    assert @r22.update_attribute('hidden', true)
+    assert @r22.update_attribute('my_hidden', true)
     assert_equal [@r1, @r2, @r3], @r1.self_and_siblings
     assert_equal [@r1, @r2, @r3], @r2.self_and_siblings
     assert_equal [@r1, @r2, @r3], @r3.self_and_siblings
@@ -495,19 +507,19 @@ class CategoryTest < Test::Unit::TestCase
     Category.new().save
     assert @r3 = Category.find(3)
     check_cache
-    assert @r11  = Category.create!(:parent_id => @r1.id)
+    assert @r11  = Category.create!(:my_parent_id => @r1.id)
     check_cache
-    Category.new(:parent_id => @r2.id).save
+    Category.new(:my_parent_id => @r2.id).save
     assert @r21 = Category.find(5)
     check_cache
-    assert @r22  = Category.create!(:parent_id => @r2.id)
+    assert @r22  = Category.create!(:my_parent_id => @r2.id)
     check_cache
-    Category.new(:parent_id => @r11.id).save
+    Category.new(:my_parent_id => @r11.id).save
     assert @r111 = Category.find(7)
     check_cache
-    assert @r211 = Category.create!(:parent_id => @r21.id)
+    assert @r211 = Category.create!(:my_parent_id => @r21.id)
     check_cache
-    assert @r221 = Category.create!(:parent_id => @r22.id)
+    assert @r221 = Category.create!(:my_parent_id => @r22.id)
     check_cache
     @r12 = @r1.children.create
     check_cache
@@ -521,69 +533,69 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_update_where_root_becomes_child
-    @r1.update_attributes(:parent_id => @r21.id)
+    @r1.update_attributes(:my_parent_id => @r21.id)
     check_cache
   end
 
   def test_update_where_child_becomes_root
-    @r111.update_attributes(:parent_id =>nil)
+    @r111.update_attributes(:my_parent_id =>nil)
     check_cache
   end
 
   def test_update_where_child_switches_within_branch
-    @r22.update_attributes(:parent_id => @r211.id)
+    @r22.update_attributes(:my_parent_id => @r211.id)
     check_cache
   end
 
   def test_update_where_child_switches_branch
-    @r221.update_attributes(:parent_id => @r11.id)
+    @r221.update_attributes(:my_parent_id => @r11.id)
     check_cache
   end
 
   def test_invalid_parent_id_type
-    assert !Category.new(:parent_id => 0.0).save
-    assert !Category.new(:parent_id => 1.5).save
-    assert !Category.new(:parent_id => 0).save
-    assert !Category.new(:parent_id => 'string').save
+    assert !Category.new(:my_parent_id => 0.0).save
+    assert !Category.new(:my_parent_id => 1.5).save
+    assert !Category.new(:my_parent_id => 0).save
+    assert !Category.new(:my_parent_id => 'string').save
   end
 
   def test_non_existant_foreign_key
-    assert !Category.new(:parent_id => 9876543210).save
-    assert_raise(ActiveRecord::RecordInvalid) { Category.create!(:parent_id => 9876543210) }
+    assert !Category.new(:my_parent_id => 9876543210).save
+    assert_raise(ActiveRecord::RecordInvalid) { Category.create!(:my_parent_id => 9876543210) }
   end
 
   def test_category_becomes_its_own_parent
-    assert !@r1.update_attributes(:parent_id => @r1.id)
-    assert @r2.parent_id = @r2.id
+    assert !@r1.update_attributes(:my_parent_id => @r1.id)
+    assert @r2.my_parent_id = @r2.id
     assert !@r2.save
   end
 
   def test_category_becomes_parent_of_descendant
-    assert !@r1.update_attributes(:parent_id => @r11.id)
-    assert !@r1.update_attributes(:parent_id => @r111.id)
-    assert !@r11.update_attributes(:parent_id => @r111.id)
-    assert @r2.parent_id = @r21.id
+    assert !@r1.update_attributes(:my_parent_id => @r11.id)
+    assert !@r1.update_attributes(:my_parent_id => @r111.id)
+    assert !@r11.update_attributes(:my_parent_id => @r111.id)
+    assert @r2.my_parent_id = @r21.id
     assert !@r2.save
   end
 
   def test_update_positions
-    Category.update_positions({'sortable_categories_0' => [3,1,2]})
-    assert_equal 1, Category.find(3).position
-    assert_equal 2, Category.find(1).position
-    assert_equal 3, Category.find(2).position
-    Category.update_positions({'sortable_categories_2' => [6,5]})
-    assert_equal 1, Category.find(6).position
-    assert_equal 2, Category.find(5).position
-    assert_raise(::ArgumentError) { Category.update_positions({'sortable_categories_2' => [1]}) }
-    assert_raise(::ArgumentError) { Category.update_positions({'sortable_categories_2' => [1,2,3]}) }
-    assert_raise(::ArgumentError) { Category.update_positions({'sortable_categories_2' => [5,6,7]}) }
-    assert_raise(::ArgumentError) { Category.update_positions({'sortable_categories_9876543210' => [1]}) }
-    assert_raise(::ArgumentError) { Category.update_positions({'sortable_categories_1' => [9876543210]}) }
+    Category.update_positions({'aac_sortable_tree_0' => [3,1,2]})
+    assert_equal 1, Category.find(3).my_position
+    assert_equal 2, Category.find(1).my_position
+    assert_equal 3, Category.find(2).my_position
+    Category.update_positions({'aac_sortable_tree_2' => [6,5]})
+    assert_equal 1, Category.find(6).my_position
+    assert_equal 2, Category.find(5).my_position
+    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_2' => [1]}) }
+    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_2' => [1,2,3]}) }
+    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_2' => [5,6,7]}) }
+    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_9876543210' => [1]}) }
+    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_1' => [9876543210]}) }
   end
 
   def get
     assert_equal @r1, Category.get(1)
-    assert @r1.update_attribute('hidden', true)
+    assert @r1.update_attribute('my_hidden', true)
     assert_nil Category.get(1)
     assert_nil Category.get(4)
     assert_nil Category.get(7)
