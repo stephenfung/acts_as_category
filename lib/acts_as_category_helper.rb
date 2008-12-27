@@ -11,7 +11,7 @@ module ActsAsCategoryHelper
   
   def aac_sortable_tree(model, ajaxurl = {:controller => :funkengallery, :action => :update_positions}, column = 'name')
     raise "Model '#{model.to_s}' does not acts_as_category" unless model.respond_to?(:acts_as_category)
-    result = '<div id="aac_sortable_tree_response" "></div>'
+    result = '<div id="aac_sortable_tree_response"></div>'
     model.roots.each { |root| result += aac_sortable_tree_list(root, ajaxurl, column) }
     result
   end
@@ -59,7 +59,7 @@ module ActsAsCategoryHelper
     result += "<ul id=\"aac_sortable_tree_#{parent_id}\">\n" if firstitem
     result += "<li id=\"category_#{category.id}\">#{category.read_attribute(column)}"
     result += category.children.empty? ? "</li>\n" : "\n"
-    category.children.each {|child| result += aac_sortable_tree_list(child, ajaxurl, column = 'name') } unless category.children.empty?
+    category.children.each {|child| result += aac_sortable_tree_list(child, ajaxurl, column) } unless category.children.empty?
     result += "</ul></li>\n" + sortable_element("aac_sortable_tree_#{parent_id}", :update => 'aac_sortable_tree_response', :url => ajaxurl) if lastitem
     result
   end
