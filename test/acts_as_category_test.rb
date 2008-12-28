@@ -51,8 +51,7 @@ class Category < ActiveRecord::Base
                    :hidden => 'my_hidden',
                    :children_count => 'my_children_count',
                    :ancestors_count => 'my_ancestors_count',
-                   :descendants_count => 'my_descendants_count',
-                   :memoize => true
+                   :descendants_count => 'my_descendants_count'
 end
 
 teardown_db # Because CategoryTest's setup method won't execute setup_db otherwise
@@ -99,11 +98,6 @@ class CategoryTest < Test::Unit::TestCase
       assert_equal c.ancestors.size,   c.my_ancestors_count
       assert_equal c.descendants.size, c.my_descendants_count
     }
-  end
-  
-  def test_memoizabla_plugin_options_parameters
-    assert Category.memoize?
-    assert @r1.memoize?
   end
   
   def test_cache_columns

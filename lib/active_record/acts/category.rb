@@ -37,11 +37,10 @@ module ActiveRecord
         # * <tt>children_count</tt> - specifies a column name to use for caching number of children (default: +children_count+)
         # * <tt>ancestors_count</tt> - specifies a column name to use for caching number of ancestors (default: +ancestors_count+)
         # * <tt>descendants_count</tt> - specifies a column name to use for caching number of descendants (default: +descendants_count+)
-        # * <tt>memoize</tt> - Should memoization be used in order to speed up performance? (default: +true+)
         def acts_as_category(options = {})
         
           # Load parameters whenever acts_as_category is called
-          configuration = { :foreign_key => "parent_id", :position => "position", :hidden => "hidden", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count', :memoize => true }
+          configuration = { :foreign_key => "parent_id", :position => "position", :hidden => "hidden", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count' }
           configuration.update(options) if options.is_a?(Hash)
           
           # Create a class association to itself
@@ -85,7 +84,6 @@ module ActiveRecord
             permissions = []
             ids.each { |id| permissions << id.to_i if id.to_i > 0 } if ids.is_a?(Array)
             class_variable_set :@@permissions, permissions.uniq
-            # TODO?: unmemoize_all if memoize?
           end
           
           # This class_eval contains methods which cannot be added wihtout having a concrete model.
@@ -95,19 +93,15 @@ module ActiveRecord
           # and not already when our plugin's init.rb adds our Acts::Category modules to ActiveRecord.
           # Another example is, that we want to overwrite the association method "children", but this
           # association doesn't exist before acts_as_category is actually called. So we need class_eval.
- 
+
           class_eval <<-EOV
-          
+
             ##############################
             # Generated instance methods #
             ##############################
-          
-            # Make class methods memoizable
-            class << self; extend ActiveSupport::Memoizable if #{configuration[:memoize]}; end
-          
-            # Include instance methods from our InstanceMethods module
-            include ActiveRecord::Acts::Category::InstanceMethods
             
+            include ActiveRecord::Acts::Category::InstanceMethods
+                        
             # Define instance getter and setter methods to keep track of the option parameters
             def parent_id_column() '#{configuration[:foreign_key]}' end
             def parent_id_column=(id) write_attribute('#{configuration[:foreign_key]}', id) end
@@ -117,8 +111,6 @@ module ActiveRecord
             def children_count_column() '#{configuration[:children_count]}' end
             def ancestors_count_column() '#{configuration[:ancestors_count]}' end
             def descendants_count_column() '#{configuration[:descendants_count]}' end
-            def self.memoize?() #{configuration[:memoize]} end
-            def memoize?() #{configuration[:memoize]} end
 
             # Overwrite the children association method, so that it will respect permitted/hidden categories
             # Note: If you ask about the children of a not-permitted category, the result will be an empty array in any case
@@ -139,7 +131,6 @@ module ActiveRecord
               root = category.#{configuration[:foreign_key]}.nil? ? category : category.root   # find root of category (if not already)
               root.refresh_cache
               root.descendants.each { |d| d.refresh_cache }
-              # TODO?: unmemoize_all if #{configuration[:memoize]}
             end
 
             # Creates a WHERE clause for SQL statements, which causes forbidden categories not to be included. Adds AND statement if parameter +true+ is given.
@@ -158,7 +149,6 @@ module ActiveRecord
             end
             
             # Returns all root +categories+, respecting permitted/hidden ones
-            # (Note: I tried to memoize this function, but it would not work correctly, so I let it be)
             def self.roots(ignore_permissions = false)
               where_clause = ignore_permissions ? '' : where_permitted(true)
               find(:all, :conditions => '#{configuration[:foreign_key]} IS NULL' + where_clause, :order => #{configuration[:position].nil? ? 'nil' : %Q{"#{configuration[:position]}"}})
@@ -197,9 +187,6 @@ module ActiveRecord
       
       module InstanceMethods
         
-        def self.memoize?() end # Dummy which is overwritten by class_eval
-        extend ActiveSupport::Memoizable if memoize?
-        
         ####################
         # Instance methods #
         ####################
@@ -214,7 +201,6 @@ module ActiveRecord
           end
           true
         end
-        memoize :permitted? if memoize?
 
         # Returns +array+ of children's ids, respecting permitted/hidden categories
        	def children_ids
@@ -222,7 +208,6 @@ module ActiveRecord
           self.children.each { |child| children_ids << child.id if child.permitted? } unless self.children.empty?
           children_ids
         end
-        memoize :children_ids if memoize?
 
         # Returns list of ancestors, disregarding any permissions
         def ancestors
@@ -230,7 +215,6 @@ module ActiveRecord
           nodes << node = node.parent while node.parent
           nodes
         end
-        memoize :ancestors if memoize?
 
         # Returns array of IDs of ancestors, disregarding any permissions
        	def ancestors_ids
@@ -241,7 +225,6 @@ module ActiveRecord
           end
           nodes
         end
-        memoize :ancestors_ids if memoize?
 
         # Returns list of descendants, respecting permitted/hidden categories
        	def descendants
@@ -252,7 +235,6 @@ module ActiveRecord
        	  } unless self.children.empty?
        	  descendants 
        	end
-        memoize :descendants if memoize?
 
        	# Returns array of IDs of descendants, respecting permitted/hidden categories
        	def descendants_ids(ignore_permissions = false)
@@ -263,7 +245,6 @@ module ActiveRecord
        	  } unless self.children.empty?
        	  descendants_ids
        	end
-        memoize :descendants_ids if memoize?
 
         # Returns the root node of the branch, disregarding any permissions
         def root
@@ -271,7 +252,6 @@ module ActiveRecord
           node = node.parent while node.parent
           node
         end
-        memoize :root if memoize?
         
         # Returns +true+ if category is root, otherwise +false+, disregarding any permissions
         def root?
