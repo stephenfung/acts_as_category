@@ -170,12 +170,13 @@ Let's bring the *permissions* feature into the game. It let's you show categorie
   
   child1.hidden = true
   subchild1.hidden = true
-  Sets child1 and subchild1 to be hidden, they are now invisible to anyone
+
+Sets child1 and subchild1 to be hidden, they are now invisible to anyone
   
   root1
-   \_ child1 (hidden)
-        \_ subchild1 (hidden)
-        \_ subchild2 (can't be found either, because child1 is hidden)
+   \_ child1             (hidden)
+        \_ subchild1     (hidden)
+        \_ subchild2     (can't be found either, because child1 is hidden)
   
 Your tree will only return this:
   
@@ -191,8 +192,8 @@ Say child1 has the id 2. We just allowed the current user to see it though it's 
 Internally this is the structure of the tree:
   
   root1
-   \_ child1 (permitted though it is hidden)
-        \_ subchild1 (still hidden to you!)
+   \_ child1            (permitted though it is hidden)
+        \_ subchild1    (still hidden to you!)
         \_ subchild2
   
 If you try to access it, it will look like this:
@@ -238,13 +239,13 @@ That will be considered:
   
 Please have a look at the comments for each function and the unit test to see, which method respects permissions and which one doesn't (e.g. ancestors).
 
-*Q:: Why is _find_ not respecting hidden?*
+*Why is _find_ not respecting hidden?*
 
-A:: I didn't feel comfortable overwriting the find method for Categories and it is not really needed.
+I didn't feel comfortable overwriting the find method for Categories and it is not really needed.
 
-*Q:: Why are _ancestors_, _ancestors_ids_ and _self.parent_ not respecting hidden/permissions?*
+*Why are _ancestors_, _ancestors_ids_ and _self.parent_ not respecting hidden/permissions?*
 
-A:: Because the whole idea of hidden is to exclude descendants of an hidden Category as well, thus the ancestors of a category you can access anyway are never going to be hidden.
+Because the whole idea of hidden is to exclude descendants of an hidden Category as well, thus the ancestors of a category you can access anyway are never going to be hidden.
   
 h2. Add positioning for ordering
 
@@ -276,4 +277,4 @@ h2. More functions
 
 Note that there is a whole lot more options an all these gizmos, widgets and gadgets. Funkensturm provides a complete example application of a gallery using acts_as_category.
 
-h2. Have fun.
+h2. Ask questions and have fun!
