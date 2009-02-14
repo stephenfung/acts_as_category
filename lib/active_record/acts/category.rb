@@ -50,7 +50,7 @@ module ActiveRecord
           # Substantial validations
           before_validation :validate_foreign_key
           before_validation_on_create :assign_position
-          validates_numericality_of configuration[:foreign_key], :only_integer => true, :greater_than => 0, :allow_nil => true, :message => 'Category must exist, and cannot be its own descendant'
+          validates_numericality_of configuration[:foreign_key], :only_integer => true, :greater_than => 0, :allow_nil => true, :message => I18n.t('acts_as_category.error.no_descendants')
           validates_numericality_of configuration[:position],    :only_integer => true, :greater_than => 0
 
           # Callbacks for automatic refresh of ancestors_count & descendants_count cache columns
@@ -163,6 +163,7 @@ module ActiveRecord
                   params[key].each_with_index { |id, position|
                     category = find(id)
                     # Verify that every category is valid and from the correct parent
+                    #logger.debug "ACTS_AS_CATEGORY: Processing \#{category.inspect}"
                     raise ArgumentError, 'Invalid attempt to update a category position: Cannot update a category (ID '+category.id.to_s+') out of given parent_id (ID '+parent_id.to_s+')' unless category.#{configuration[:foreign_key]}.nil? && parent_id == 0 || parent_id > 0 && category.#{configuration[:foreign_key]} == parent_id
                     @counter = position + 1
                   }
@@ -175,6 +176,16 @@ module ActiveRecord
               }
               rescue ActiveRecord::RecordNotFound
               raise ArgumentError, 'Invalid attempt to update a category position: Parent category does not exist'
+            end
+
+            # Updating all category positions into correct 1, 2, 3 etc. per hierachy level
+            def self.refresh_positions(categories = nil)
+              categories = roots if categories.blank?
+              categories = [categories] unless categories.is_a? Array
+              categories.each_with_index { |category, position|
+                category.update_attribute('#{configuration[:position]}', position + 1)
+                refresh_positions(category.children) unless category.children.empty?
+              }
             end
             
           EOV
@@ -299,7 +310,7 @@ module ActiveRecord
         # Assigns a position integer after creation of a category
         def assign_position
           # Position for new nodes is (number of siblings + 1), but only for new categories
-          if read_attribute(parent_id_column).nil?
+          if self.read_attribute(parent_id_column).nil?
             self.write_attribute(position_column, self.class.roots(true).size + 1)
           else
             self.write_attribute(position_column, self.class.find(:all, :conditions => ["#{parent_id_column} = ?", self.read_attribute(parent_id_column)]).size + 1)
@@ -324,6 +335,7 @@ module ActiveRecord
           self.class.refresh_cache_of_branch_with(@parent_id_before) unless @parent_id_before.nil? || @parent_id_before == self.root.id
           # Refresh current branch in any case
           self.class.refresh_cache_of_branch_with(self.root)
+          self.class.refresh_positions
         end
         
         # Gather root.id before destruction

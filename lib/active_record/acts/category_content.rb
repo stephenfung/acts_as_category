@@ -22,12 +22,18 @@ module ActiveRecord
         #
         # Configuration options are:
         #
-        # * <tt>category</tt> - specifies the model name of the category (default: +parent_id+)
+        # * <tt>category</tt> - specifies the model name of the category (default: +category+)
+        # * <tt>counter_cache</tt> - specifies the counter_cache to use (default: +pictures_count+)
         def acts_as_category_content(options = {})
     
           # Load parameters whenever acts_as_category is called
-          configuration = { :category => 'category' }
+          configuration = { :category => 'category', :counter_cache => 'pictures_count' }
           configuration.update(options) if options.is_a?(Hash)
+          
+          belongs_to configuration[:category], :counter_cache => configuration[:counter_cache]
+          
+          validates_associated configuration[:category]
+          validates_presence_of "#{configuration[:category]}_id", :message => I18n.t('acts_as_category_content.error.no_subcategories')
           
           # This class_eval contains methods which cannot be added wihtout having a concrete model.
           # Say, we want these methods to use parameters like "configuration[:category]", but we
@@ -40,7 +46,7 @@ module ActiveRecord
             ##############################
             # Generated instance methods #
             ##############################
-
+            
             # Inheriting category permitted? method
             def permitted?
               self.#{configuration[:category]}.permitted?
