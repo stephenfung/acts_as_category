@@ -6,5 +6,5 @@ de:
     
   acts_as_category_content:
     error:
-      no_descendants: darf keine Unterkategorien haben
+      no_subcategories: darf keine Unterkategorien haben
       

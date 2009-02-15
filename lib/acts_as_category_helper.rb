@@ -100,11 +100,11 @@ module ActsAsCategoryHelper
       result += "<span class='#{style}'>#{category.name}</span>"
     elsif category.permitted?
       style = 'color: #0b0;'
-      result += config[:deactivate_links] ? category.name : link_to_remote(category.name, {:update => config[:update], :url => config[:url].update({:deny => category.id})}, {:style => style})
+      result += config[:deactivate_links] ? category.name : link_to_remote(category.name, {:update => config[:update], :url => config[:url].update({:deny => category.id, :allow => nil})}, {:style => style})
     else
       style = 'color: #c00;'
       if category.hidden then
-        result += config[:deactivate_links] ? category.name : link_to_remote(category.name, {:update => config[:update], :url => config[:url].update({:allow => category.id})}, {:style => style})
+        result += config[:deactivate_links] ? category.name : link_to_remote(category.name, {:update => config[:update], :url => config[:url].update({:allow => category.id, :deny => nil})}, {:style => style})
       else
         result += "<span style='#{style}'>#{category.name}</span>"
       end

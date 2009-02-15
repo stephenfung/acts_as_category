@@ -6,4 +6,4 @@ en:
     
   acts_as_category_content:
     error:
-      no_descendants: must not have subcategories
+      no_subcategories: must not have subcategories
