@@ -56,19 +56,19 @@ module ActsAsCategoryHelper
     result = tag('a', {:name => anchor}) + tag('/a')
     result += "<li#{html_headline}>"
     result += '<b>' if @category == category.id
-    if category.pictures_count == 0 and category.ancestors_count > 0 and category.children_count == 0 then
+    if category.pictures_count == 0 and category.ancestors_count > 0 and category.children.size == 0 then
       result += h(category.name)
-    elsif category.ancestors_count == 0 or category.children_count > 0 then
+    elsif category.ancestors_count == 0 or category.children.size > 0 then
       result += content_tag('a', h(category.name), :onclick => "new Element.toggle('#{anchor}')", :href => "\##{anchor}")
     else
       result += link_to_unless_current h(category.name), {:controller => 'category', :id => category.id } unless category.ancestors_count == 0
     end
     result += '</b>' if @category == category.id
-    result += html_count if category.pictures_count > 0
+    result += html_count if category.pictures.size > 0
     result += '</li>'
 
-    if category.children_count > 0
-      addon = (category.ancestors_count == 0 or category.descendants_ids.include?(@category) or (category.self_and_siblings_ids.include?(@category) and category.children_count == 0)) ? '' : ' style="display: none;"'
+    if category.children.size > 0
+      addon = (category.ancestors_count == 0 or category.descendants_ids.include?(@category) or (category.self_and_siblings_ids.include?(@category) and category.children.size == 0)) ? '' : ' style="display: none;"'
       result += "<ul id='#{anchor}' #{addon}>"
       category.children.each { |child| result += aac_tree_category(child) }
       result += '</ul>'

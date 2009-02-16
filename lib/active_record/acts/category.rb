@@ -281,6 +281,11 @@ module ActiveRecord
           parent ? parent.children : self.class.roots
         end
 
+        # Returns all ids of siblings and a reference to the current node, respecting permitted/hidden categories
+        def self_and_siblings_ids
+          parent ? parent.children_ids : self.class.roots.map {|x| x.id}
+        end
+        
         # Immediately refresh cache of category instance
         def refresh_cache
           self.class.connection.execute "UPDATE #{self.class.table_name} SET #{ancestors_count_column}=#{self.ancestors.size},  #{descendants_count_column}=#{self.descendants.size} WHERE id=#{self.id}"
