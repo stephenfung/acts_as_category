@@ -340,6 +340,7 @@ module ActiveRecord
           self.class.refresh_cache_of_branch_with(@parent_id_before) unless @parent_id_before.nil? || @parent_id_before == self.root.id
           # Refresh current branch in any case
           self.class.refresh_cache_of_branch_with(self.root)
+          # Refresh all positions
           self.class.refresh_positions
         end
         
