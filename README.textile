@@ -4,25 +4,25 @@ h1. Introduction
 
 Let me explain to you what I mean by *acts_as_category*, which is yet another acts_as plugin for Ruby on Rails ActiveRecord models. Copyright is 2009 by <a href="http://www.funkensturm.com">www.funkensturm.com</a>, released under the _MIT/X11 license_, which is free for all to do whatever you want with it.
 
-h2. Demonstration
+h3. Demonstration
 
 Find a out-of-the-box demo application at <a href="http://github.com/funkensturm/funkengallery_demo">www.github.com/funkensturm/funkengallery_demo</a>
 
-h4. acts_as_tree provides functionality for trees, but lacks some things:
+h3. acts_as_tree provides functionality for trees, but lacks some things:
 
 * It has no descendants method or things like _ancestors_ids_
 * It doesn't validate _parent_id_ whatsoever, which means that you can make a category a parent of itself, etc.
 * It has no caching for ancestors and descendants
 * It won't help if you want certain users to see only certain nodes
 
-h4. acts_as_list is maybe not exactly what I want either:
+h3. acts_as_list is maybe not exactly what I want either:
 
 * It also has no validation or features to hide entries
 * It doesn't support a scriptaculous sortable_list to reorder the tree
 * It has more than you might need, providing all these _move_just_a_little_bit_higher_ methods
 * Last but not least, it won't work together with _acts_as_tree_ unless you hack around a lot with the scope code
 
-h4. So I came up with acts_as_category, and this is what it does:
+h3. So I came up with acts_as_category, and this is what it does:
 
 * It provides a structure for infinite categories and their subcategories (similar to acts_as_tree)
 * It validates that no category will be the parent of its own descendant and all other variations of these foreign key things
@@ -47,7 +47,7 @@ h1. Tutorial
 
 h2. Requirements
 
-* _Rails 2.2_ or higher (works also on _Rails 2.3_ unstable)
+* _Rails 2.2_ or higher (works also on _Rails 2.3 edge_)
 
 h2. Installation
 
