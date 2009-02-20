@@ -36,7 +36,7 @@ h3. So I came up with acts_as_category, and this is what it does:
 * A full unit test comes along with it
 * As you can see in the test: All options (e.g. database field names) highly configurable via a simple hash
 
-h4. What can acts_as_category NOT do?
+h3. What can acts_as_category NOT do?
 
 * You can't simply "turn off" certain features to speed up your application. If you really want to make this thing more efficient than it already is, _memoize_ each critical function (it work's fine, since I'm using it myself, but the unit tests will fail whenever I use memoize, that's why it's not published).
 * ActiveRecord's "find" method won't respect the hidden categories feature (but alternative methods are provided)
