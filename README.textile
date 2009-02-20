@@ -4,19 +4,26 @@ h1. Introduction
 
 Let me explain to you what I mean by *acts_as_category*, which is yet another acts_as plugin for Ruby on Rails ActiveRecord models. Copyright is 2009 by <a href="http://www.funkensturm.com">www.funkensturm.com</a>, released under the _MIT/X11 license_, which is free for all to do whatever you want with it.
 
-*acts_as_tree* provides functionality for trees, but lacks some things:
+h2. Demonstration
+
+Find a out-of-the-box demo application at <a href="http://github.com/funkensturm/funkengallery_demo">www.github.com/funkensturm/funkengallery_demo</a>
+
+h4. acts_as_tree provides functionality for trees, but lacks some things:
+
 * It has no descendants method or things like _ancestors_ids_
 * It doesn't validate _parent_id_ whatsoever, which means that you can make a category a parent of itself, etc.
 * It has no caching for ancestors and descendants
 * It won't help if you want certain users to see only certain nodes
 
-*acts_as_list* is maybe not exactly what I want either:
+h4. acts_as_list is maybe not exactly what I want either:
+
 * It also has no validation or features to hide entries
 * It doesn't support a scriptaculous sortable_list to reorder the tree
 * It has more than you might need, providing all these _move_just_a_little_bit_higher_ methods
 * Last but not least, it won't work together with _acts_as_tree_ unless you hack around a lot with the scope code
 
-So I came up with *acts_as_category*, and this is what it does:
+h4. So I came up with acts_as_category, and this is what it does:
+
 * It provides a structure for infinite categories and their subcategories (similar to acts_as_tree)
 * It validates that no category will be the parent of its own descendant and all other variations of these foreign key things
 * You can define which hidden categories should still be permitted to the current user (through a simple class variable, thus it can easily be set per user)
@@ -29,7 +36,8 @@ So I came up with *acts_as_category*, and this is what it does:
 * A full unit test comes along with it
 * As you can see in the test: All options (e.g. database field names) highly configurable via a simple hash
 
-What can *acts_as_category* *not* do?
+h4. What can acts_as_category NOT do?
+
 * You can't simply "turn off" certain features to speed up your application. If you really want to make this thing more efficient than it already is, _memoize_ each critical function (it work's fine, since I'm using it myself, but the unit tests will fail whenever I use memoize, that's why it's not published).
 * ActiveRecord's "find" method won't respect the hidden categories feature (but alternative methods are provided)
 * _update_ and _update_attributes_ must not be used to change the parent_id, because there is no validation callback
@@ -273,8 +281,6 @@ And you can already try it. You can change the URL to that action method like th
   <%= aac_sortable_tree(Category, {:action => :update_positions}) %>
   <%= aac_sortable_tree(Category, {:controller => :mycontroller, :action => :update_positions}) %>
 
-h2. More functions
-
-Note that there is a whole lot more options an all these gizmos, widgets and gadgets. Funkensturm provides a complete example application of a gallery using acts_as_category.
-
 h2. Ask questions and have fun!
+
+Feel free to add your comments and don't forget about the <a href="http://github.com/funkensturm/funkengallery_demo">demo application</a>.
