@@ -62,8 +62,8 @@ module ActiveRecord
 
           # Add readonly attribute to cache columns
           # Note that children_count is automatically readonly
-          attr_readonly configuration[:ancestors_count]   if column_names.include? configuration[:ancestors_count]
-          attr_readonly configuration[:descendants_count] if column_names.include? configuration[:descendants_count]
+          #attr_readonly configuration[:ancestors_count]   if column_names.include? configuration[:ancestors_count]
+          #attr_readonly configuration[:descendants_count] if column_names.include? configuration[:descendants_count]
 
           # Define class variables
           class_variable_set :@@permissions, []
