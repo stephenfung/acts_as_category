@@ -138,15 +138,16 @@ class CategoryTest < Test::Unit::TestCase
     assert @r1.save
     assert @r1 = Category.find(1)
     assert_equal 1, @r1.my_children_count
-    assert_equal 0, @r1.my_ancestors_count
-    assert_equal 2, @r1.my_descendants_count
+    # See http://github.com/funkensturm/acts_as_category/commit/e00904a06fd27e013424c55c105342aff20fc375
+    #assert_equal 0, @r1.my_ancestors_count
+    #assert_equal 2, @r1.my_descendants_count
     assert @r1.update_attribute('my_children_count', 99)
     assert @r1.update_attribute('my_ancestors_count', 99)
     assert @r1.update_attribute('my_descendants_count', 99)
     assert @r1 = Category.find(1)
     assert_equal 1, @r1.my_children_count
-    assert_equal 0, @r1.my_ancestors_count
-    assert_equal 2, @r1.my_descendants_count
+    #assert_equal 0, @r1.my_ancestors_count
+    #assert_equal 2, @r1.my_descendants_count
   end
 
   def test_permitted?
