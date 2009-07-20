@@ -134,13 +134,13 @@ module ActiveRecord
             end
 
             # Creates a WHERE clause for SQL statements, which causes forbidden categories not to be included. Adds AND statement if parameter +true+ is given.
-            #  where_permitted       #=> " (NOT hidden OR id IN (1,2,3)) "
-            #  where_permitted       #=> " (NOT hidden) " # whenver @@permissions is empty
+            #  where_permitted       #=> " (NOT hidden OR hidden=0 OR id IN (1,2,3)) "
+            #  where_permitted       #=> " (NOT hidden OR hidden=0) " # whenver @@permissions is empty
             #  where_permitted(true) #=> " AND (NOT hidden OR id IN (1,2,3)) "
             #  where_permitted(true) #=> " AND (NOT hidden) " # whenver @@permissions is empty
             def self.where_permitted(with_and = false)
               id_addon = (class_variable_get :@@permissions).size == 0 ? '' : " OR id IN (\#{(class_variable_get :@@permissions).join(',')})"
-              "\#{with_and ? ' AND' : ''} (#{configuration[:hidden]} IS NULL\#{id_addon}) "
+              "\#{with_and ? ' AND' : ''} (#{configuration[:hidden]} IS NULL OR #{configuration[:hidden]}=0\#{id_addon}) "
             end
             
             # Returns the +category+ to a given +id+. This is as a replacement for find(id), but it respects permitted/hidden categories.

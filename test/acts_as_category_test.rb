@@ -124,11 +124,11 @@ class CategoryTest < Test::Unit::TestCase
   end
 
   def test_where_permitted_sql_query
-    assert_equal ' (my_hidden IS NULL) ', Category.where_permitted
-    assert_equal ' AND (my_hidden IS NULL) ', Category.where_permitted(true)
+    assert_equal ' (my_hidden IS NULL OR my_hidden=0) ', Category.where_permitted
+    assert_equal ' AND (my_hidden IS NULL OR my_hidden=0) ', Category.where_permitted(true)
     Category.permissions = [1,2,3]
-    assert_equal ' (my_hidden IS NULL OR id IN (1,2,3)) ', Category.where_permitted
-    assert_equal ' AND (my_hidden IS NULL OR id IN (1,2,3)) ', Category.where_permitted(true)
+    assert_equal ' (my_hidden IS NULL OR my_hidden=0 OR id IN (1,2,3)) ', Category.where_permitted
+    assert_equal ' AND (my_hidden IS NULL OR my_hidden=0 OR id IN (1,2,3)) ', Category.where_permitted(true)
   end
   
   def test_attr_readonly
