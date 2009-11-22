@@ -2,9 +2,9 @@ module ActiveRecord
   module Acts
     module Category
       
-      ###############
-      # Constructor #
-      ###############
+      # –––––––––––
+      # Constructor
+      # –––––––––––
       
       # This constructor is evoked when this module is included by <i>vendor/plugins/acts_as_category/init.rb</i>. That is, every time your Rails application is loaded, ActiveRecord is extended with the Acts::Category modules, and thus calls this constructor method.
       def self.included(base)
