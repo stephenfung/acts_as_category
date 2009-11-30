@@ -309,6 +309,7 @@ module ActiveRecord
        	end
 
         # Returns the root node of the branch, disregarding any permissions
+        # This is okay, since you should never have had access to this category if the root was hidden
         def root
           node = self
           node = node.parent while node.parent

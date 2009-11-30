@@ -633,6 +633,7 @@ class CategoryTest < Test::Unit::TestCase
   def test_find_with_permissions
     assert_equal @r1, Category.permitted.find(@r1.id)
     assert @r1.update_attribute 'my_hidden', true
+    assert_equal '', Category.permitted.inspect
     assert_raise(ActiveRecord::RecordNotFound) { Category.permitted.find(@r1.id) }
     assert_nil Category.permitted.find(@r11.id)
     assert_nil Category.permitted.find(@r111.id)
