@@ -6,18 +6,21 @@ module ActiveRecord
       # Constructor
       # –––––––––––
       
-      # This constructor is evoked when this module is included by <i>vendor/plugins/acts_as_category/init.rb</i>. That is, every time your Rails application is loaded, ActiveRecord is extended with the Acts::Category modules, and thus calls this constructor method.
+      # This constructor is evoked when this module is included into <tt>ActiveRecord::Base</tt> by
+      # <tt>vendor/plugins/acts_as_category/init.rb</tt>. That is, every time your Rails application is loaded
+      #
       def self.included(base)
-        # Add class methods module of Acts::Category to the superior class ActiveRecord
-        # In that module, the InstanceMethods will be added as well
+        # Add ClassMethods module of Acts::Category (see below) to the super-class <tt>ActiveRecord::Base</tt>.
+        # Note that the ClassMethods module will add the InstanceMethods, respectively.
+        #
         base.extend ClassMethods
       end
 
-      #######################
-      # ClassMethods module #
-      #######################
+      # –––––––––––––––––––
+      # ClassMethods module
+      # –––––––––––––––––––
       
-      module ClassMethods        
+      module ClassMethods
         # Please refer to README for more information about this plugin.
         #
         #  create_table "categories", :force => true do |t|
@@ -31,55 +34,86 @@ module ActiveRecord
         #
         # Configuration options are:
         #
-        # * <tt>foreign_key</tt> - specifies the column name to use for tracking of the tree (default: +parent_id+)
-        # * <tt>position</tt> - specifies the integer column name to use for ordering siblings (default: +position+)
-        # * <tt>hidden</tt> - specifies a column name to use for hidden flag (default: +hidden+)
-        # * <tt>children_count</tt> - specifies a column name to use for caching number of children (default: +children_count+)
-        # * <tt>ancestors_count</tt> - specifies a column name to use for caching number of ancestors (default: +ancestors_count+)
-        # * <tt>descendants_count</tt> - specifies a column name to use for caching number of descendants (default: +descendants_count+)
-        def acts_as_category(options = {})
+        # * <tt>foreign_key</tt> - specifies the column name to use for tracking of the tree. Default is <tt>parent_id</tt>.
+        # * <tt>position</tt> - specifies the integer column name to use for ordering siblings. Default is <tt>position</tt>.
+        # * <tt>hidden</tt> - specifies a column name to use for hidden (i.e. private) flag. Default is <tt>hidden</tt>.
+        # * <tt>children_count</tt> - specifies a column name used for caching number of children. Default is <tt>children_count</tt>.
+        # * <tt>ancestors_count</tt> - specifies a column name used for caching number of ancestors. Default is <tt>ancestors_count</tt>.
+        # * <tt>descendants_count</tt> - specifies a column name used for caching number of descendants. Default is <tt>descendants_count</tt>.
+        # * <tt>counts_readonly</tt> - Will assign <tt>attr_readonly</tt> to the fields <tt>ancestors_count</tt> and <tt>descendants_count</tt>. This is experimental, thus default is <tt>false</tt>.
+        def acts_as_category(params = {})
         
-          # Load parameters whenever acts_as_category is called
-          configuration = { :foreign_key => "parent_id", :position => "position", :hidden => "hidden", :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count' }
-          configuration.update(options) if options.is_a?(Hash)
+          # Load default options whenever acts_as_category is called.
+          # After that, overwrite them with the individual settings passed by <tt>params</tt>.
+          options = { :foreign_key => 'parent_id', :position => 'position', :hidden => 'hidden', :scope => '1 = 1', :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count', :counts_readonly => false }
+          options.update(params) if params.is_a?(Hash)
           
-          # Create a class association to itself
-          belongs_to :parent, :class_name => name, :foreign_key => configuration[:foreign_key], :counter_cache => configuration[:children_count]
-          has_many :children, :class_name => name, :foreign_key => configuration[:foreign_key], :order => configuration[:position], :dependent => :destroy
+          # Create a class association to itself.
+          # Note that subcategories will be destroyed whenever a parent is deleted.
+          belongs_to :parent, :class_name => name, :foreign_key => options[:foreign_key], :counter_cache => options[:children_count]
+          has_many :children, :class_name => name, :foreign_key => options[:foreign_key], :order => options[:position], :dependent => :destroy
 
           # Substantial validations
-          before_validation :validate_foreign_key
+          before_validation           :validate_foreign_key
           before_validation_on_create :assign_position
-          validates_numericality_of configuration[:foreign_key], :only_integer => true, :greater_than => 0, :allow_nil => true, :message => I18n.t('acts_as_category.error.no_descendants')
-          validates_numericality_of configuration[:position],    :only_integer => true, :greater_than => 0
+          validates_numericality_of   options[:foreign_key], :only_integer => true, :greater_than => 0, :allow_nil => true, :message => I18n.t('acts_as_category.error.no_descendants')
 
           # Callbacks for automatic refresh of ancestors_count & descendants_count cache columns
-          after_create :refresh_cache_after_create
-          before_update :prepare_refresh_before_update
-          after_update :refresh_cache_after_update
+          after_create   :refresh_cache_after_create
+          before_update  :prepare_refresh_before_update
+          after_update   :refresh_cache_after_update
           before_destroy :prepare_refresh_before_destroy
-          after_destroy :refresh_cache_after_destroy
+          after_destroy  :refresh_cache_after_destroy
 
-          # Add readonly attribute to cache columns
-          # Note that children_count is automatically readonly
-          #attr_readonly configuration[:ancestors_count]   if column_names.include? configuration[:ancestors_count]
-          #attr_readonly configuration[:descendants_count] if column_names.include? configuration[:descendants_count]
-
+          # Assign readonly attribute to "self-made" cache columns
+          # Note that <tt>children_count</tt> is automatically readonly
+          # EXPERIMENTAL NOTICE: This caused bugs for some people, so it's optional.
+          if options[:counts_readonly]
+            attr_readonly options[:ancestors_count]   if column_names.include? options[:ancestors_count]
+            attr_readonly options[:descendants_count] if column_names.include? options[:descendants_count]
+          end
+          
           # Define class variables
           class_variable_set :@@permissions, []
           
-          #################
-          # Class methods #
-          #################
+          # Generate an order clause according and validation to whether positions are used or not
+          if column_names.include? options[:position]
+            validates_numericality_of options[:position], :only_integer => true, :greater_than => 0
+            order_clause_value = "%Q{#{options[:position]}}"
+          else
+            order_clause_value = 'nil'
+          end
+                    
+          # Generate scope condition
+          if options[:scope].is_a?(Symbol)
+            options[:scope] = "#{options[:scope]}_id".intern if options[:scope].to_s !~ /_id$/
+            scope_condition_method = %(
+              def scope_condition
+                if #{options[:scope].to_s}.nil?
+                  "#{options[:scope].to_s} IS NULL"
+                else
+                  "#{options[:scope].to_s} = \#{#{options[:scope].to_s}}"
+                end
+              end
+            )
+          else
+            scope_condition_method = "def scope_condition() %Q{#{options[:scope]}} end"
+          end
+          
+          # –––––––––––––
+          # Class methods
+          # –––––––––––––
 
-          # Returns an +array+ with +ids+ of categories, which are to be allowed to be seen, though they might be hidden. Returns an empty +array+ if none.
-          # The idea is, to define a class variable array +permissions+ each time the user logs in (which is job of the controller, in case you would like to use this functionality).
+          # Returns an +array+ with +ids+ of categories, which are to be allowed to be seen,
+          # though they might be flagged with the +hidden+ attribute. Returns an empty +array+ if none.
+          # The idea is, to define a class variable array +permissions+ each time the user logs in
+          # (which is job of the controller, in case you would like to use this functionality).
           def self.permissions
             class_variable_get :@@permissions
           end
-      
+          
           # Takes an +array+ of +ids+ of categories and defines them to be permitted.
-          # Note that this overwrites the array with each call, instead of adding further ids to it.
+          # Don't forget that this overwrites the array with each call, instead of adding further ids to it.
           def self.permissions=(ids)
             permissions = []
             ids.each { |id| permissions << id.to_i if id.to_i > 0 } if ids.is_a?(Array)
@@ -87,33 +121,39 @@ module ActiveRecord
           end
           
           # This class_eval contains methods which cannot be added wihtout having a concrete model.
-          # Say, we want these methods to use parameters like "configuration[:foreign_key]", but we
+          # Say, we want these methods to use parameters like "options[:foreign_key]", but we
           # don't have these parameters, unless somebody evokes the acts_as_category method in his
-          # model. So we use class_eval, which generates methods, when acts_as_category is called,
-          # and not already when our plugin's init.rb adds our Acts::Category modules to ActiveRecord.
-          # Another example is, that we want to overwrite the association method "children", but this
+          # model. So we use class_eval, which generates methods, whenever acts_as_category is called,
+          # and not already when our plugin's init.rb adds our Acts::Category modules to ActiveRecord::Base.
+          # Another reason is, that we want to overwrite the association method <tt>children</tt>, but this
           # association doesn't exist before acts_as_category is actually called. So we need class_eval.
-
+          
           class_eval <<-EOV
 
-            ##############################
-            # Generated instance methods #
-            ##############################
+            # ––––––––––––––––––––––––––
+            # Generated instance methods
+            # ––––––––––––––––––––––––––
             
+            # This will actually include the InstanceMethods to your model
             include ActiveRecord::Acts::Category::InstanceMethods
-                        
-            # Define instance getter and setter methods to keep track of the option parameters
-            def parent_id_column() '#{configuration[:foreign_key]}' end
-            def parent_id_column=(id) write_attribute('#{configuration[:foreign_key]}', id) end
-            def position_column() '#{configuration[:position]}' end
-            def position_column=(pos) write_attribute('#{configuration[:position]}', pos) end
-            def hidden_column() '#{configuration[:hidden]}' end
-            def children_count_column() '#{configuration[:children_count]}' end
-            def ancestors_count_column() '#{configuration[:ancestors_count]}' end
-            def descendants_count_column() '#{configuration[:descendants_count]}' end
+
+            # Include previously generated instance methods
+            #{scope_condition_method}
+
+            # Include previously generated class methods
+            def self.order_clause() #{order_clause_value} end
+
+            # Define instance getter methods to keep track of the column names
+            def self.parent_id_column()         %Q{#{options[:foreign_key]}}       end
+            def self.position_column()          %Q{#{options[:position]}}          end
+            def self.hidden_column()            %Q{#{options[:hidden]}}            end
+            def self.children_count_column()    %Q{#{options[:children_count]}}    end
+            def self.ancestors_count_column()   %Q{#{options[:ancestors_count]}}   end
+            def self.descendants_count_column() %Q{#{options[:descendants_count]}} end
 
             # Overwrite the children association method, so that it will respect permitted/hidden categories
-            # Note: If you ask about the children of a not-permitted category, the result will be an empty array in any case
+            # Note: If you request the children of a not-permitted category, the result will be an empty array
+            #
             alias :orig_children :children
             def children
               result = orig_children
@@ -126,36 +166,17 @@ module ActiveRecord
             ###########################
                 
             # Update cache columns of a whole branch, which includes the given +category+ or its +id+.
+            #
             def self.refresh_cache_of_branch_with(category)
-              category = find(category) unless category.instance_of?(self)   # possibly convert id into category
-              root = category.#{configuration[:foreign_key]}.nil? ? category : category.root   # find root of category (if not already)
+              category = find(category) unless category.instance_of?(self)               # possibly convert id into category
+              root = category.#{options[:foreign_key]}.nil? ? category : category.root   # find root of category (if not already)
               root.refresh_cache
               root.descendants.each { |d| d.refresh_cache }
-            end
-
-            # Creates a WHERE clause for SQL statements, which causes forbidden categories not to be included. Adds AND statement if parameter +true+ is given.
-            #  where_permitted       #=> " (NOT hidden OR hidden=0 OR id IN (1,2,3)) "
-            #  where_permitted       #=> " (NOT hidden OR hidden=0) " # whenver @@permissions is empty
-            #  where_permitted(true) #=> " AND (NOT hidden OR id IN (1,2,3)) "
-            #  where_permitted(true) #=> " AND (NOT hidden) " # whenver @@permissions is empty
-            def self.where_permitted(with_and = false)
-              id_addon = (class_variable_get :@@permissions).size == 0 ? '' : " OR id IN (\#{(class_variable_get :@@permissions).join(',')})"
-              "\#{with_and ? ' AND' : ''} (#{configuration[:hidden]} IS NULL OR #{configuration[:hidden]}=0\#{id_addon}) "
-            end
-            
-            # Returns the +category+ to a given +id+. This is as a replacement for find(id), but it respects permitted/hidden categories.
-            def self.get(id)
-              find(:first, :conditions => 'id = ' + id.to_i.to_s + where_permitted(true))
-            end
-            
-            # Returns all root +categories+, respecting permitted/hidden ones
-            def self.roots(ignore_permissions = false)
-              where_clause = ignore_permissions ? '' : where_permitted(true)
-              find(:all, :conditions => '#{configuration[:foreign_key]} IS NULL' + where_clause, :order => #{configuration[:position].nil? ? 'nil' : %Q{"#{configuration[:position]}"}})
             end
             
             # Receives the controller's +params+ variable and updates category positions accordingly.
             # Please refer to the helper methods that came with this model for further information.
+            #
             def self.update_positions(params)
               params.each_key { |key|
                 if key.include?('aac_sortable_tree_')
@@ -163,15 +184,14 @@ module ActiveRecord
                   params[key].each_with_index { |id, position|
                     category = find(id)
                     # Verify that every category is valid and from the correct parent
-                    #logger.debug "ACTS_AS_CATEGORY: Processing \#{category.inspect}"
-                    raise ArgumentError, 'Invalid attempt to update a category position: Cannot update a category (ID '+category.id.to_s+') out of given parent_id (ID '+parent_id.to_s+')' unless category.#{configuration[:foreign_key]}.nil? && parent_id == 0 || parent_id > 0 && category.#{configuration[:foreign_key]} == parent_id
+                    raise ArgumentError, 'Invalid attempt to update a category position: Cannot update a category (ID '+category.id.to_s+') out of given parent_id (ID '+parent_id.to_s+')' unless category.#{options[:foreign_key]}.nil? && parent_id == 0 || parent_id > 0 && category.#{options[:foreign_key]} == parent_id
                     @counter = position + 1
                   }
                   self_and_siblings_count = parent_id <= 0 ? roots.size : find(parent_id).children.count
                   # Verify that the parameters correspond to every child of this parent
                   raise ArgumentError, 'Invalid attempt to update a category position: Number of category IDs in param hash is wrong ('+@counter.to_s+' instead of '+self_and_siblings_count.to_s+' for parent with ID '+parent_id.to_s+')' unless @counter == self_and_siblings_count
                   # Do the actual position update
-                  params[key].each_with_index { |id, position| find(id).update_attribute('#{configuration[:position]}', position + 1)}
+                  params[key].each_with_index { |id, position| find(id).update_attribute('#{options[:position]}', position + 1)}
                   end
               }
               rescue ActiveRecord::RecordNotFound
@@ -179,16 +199,36 @@ module ActiveRecord
             end
 
             # Updating all category positions into correct 1, 2, 3 etc. per hierachy level
+            #
             def self.refresh_positions(categories = nil)
               categories = roots if categories.blank?
               categories = [categories] unless categories.is_a? Array
               categories.each_with_index { |category, position|
-                category.update_attribute('#{configuration[:position]}', position + 1)
+                category.update_attribute('#{options[:position]}', position + 1)
                 refresh_positions(category.children) unless category.children.empty?
               }
             end
             
           EOV
+
+          # Scope for permitted categories
+          # Does *NOT* respect inherited permissions!
+          named_scope :permitted, lambda {
+            if permissions.empty?
+              { :conditions => "#{hidden_column} IS NULL OR #{hidden_column}=0", :order => order_clause }
+            else
+              { :conditions => ["#{hidden_column} IS NULL OR #{hidden_column}=0 OR id IN (?)", class_variable_get(:@@permissions)], :order => order_clause }
+            end
+          }
+
+          # Returns all root +categories+, disregarding permissions
+          named_scope :roots!, lambda { { :conditions => { parent_id_column => nil }, :order => order_clause } }
+
+          # Returns all root +categories+, respecting permitted/hidden ones
+          def self.roots
+            roots!.permitted
+          end
+
         end
       end
 
@@ -201,6 +241,17 @@ module ActiveRecord
         ####################
         # Instance methods #
         ####################
+
+        # These are just shortcuts to keep track of the class wide variables
+        def permissions()              self.class.permissions              end
+        def order_clause()             self.class.order_clause             end
+        # And column names defined in the class
+        def parent_id_column()         self.class.parent_id_column         end
+        def position_column()          self.class.position_column          end
+        def hidden_column()            self.class.hidden_column            end
+        def children_count_column()    self.class.children_count_column    end
+        def ancestors_count_column()   self.class.ancestors_count_column   end
+        def descendants_count_column() self.class.descendants_count_column end
 
         # Returns +true+ if category is visible/permitted, otherwise +false+.
         def permitted?
@@ -316,7 +367,7 @@ module ActiveRecord
         def assign_position
           # Position for new nodes is (number of siblings + 1), but only for new categories
           if self.read_attribute(parent_id_column).nil?
-            self.write_attribute(position_column, self.class.roots(true).size + 1)
+            self.write_attribute(position_column, self.class.roots!.size + 1)
           else
             self.write_attribute(position_column, self.class.find(:all, :conditions => ["#{parent_id_column} = ?", self.read_attribute(parent_id_column)]).size + 1)
           end

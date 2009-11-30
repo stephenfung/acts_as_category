@@ -14,7 +14,7 @@ require 'rubygems'
 require 'active_record'
 require 'action_view'
 
-ActiveRecord::Base.establish_connection(:adapter => "sqlite3", :dbfile => ":memory:")
+ActiveRecord::Base.establish_connection(:adapter => "sqlite3", :database => ":memory:")
 $stdout = StringIO.new # Prevent ActiveRecord's annoying schema statements
 
 def setup_db
