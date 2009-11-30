@@ -212,7 +212,8 @@ module ActiveRecord
           EOV
 
           # Scope for permitted categories
-          # Does *NOT* respect inherited permissions!
+          # Does *NOT* respect inherited permissions! 
+          # This is intended to be used with roots only
           named_scope :permitted, lambda {
             if permissions.empty?
               { :conditions => "#{hidden_column} IS NULL OR #{hidden_column}=0", :order => order_clause }
@@ -228,7 +229,18 @@ module ActiveRecord
           def self.roots
             roots!.permitted
           end
-
+          
+          # Deletes all prohibited categories from a find()-resultset
+          def self.get(*args)
+            result = find(*args)
+            return nil if result == nil
+            result = [result] unless result.is_a? Array
+            result.delete_if { |category| !category.permitted? }
+            return result.first if result.size == 1
+            raise ActiveRecord::RecordNotFound if result.empty?
+            result
+          end
+          
         end
       end
 

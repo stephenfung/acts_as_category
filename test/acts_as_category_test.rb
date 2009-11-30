@@ -629,17 +629,22 @@ class CategoryTest < Test::Unit::TestCase
 #    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_9876543210' => [1]}) }
 #    assert_raise(::ArgumentError) { Category.update_positions({'aac_sortable_tree_1' => [9876543210]}) }
 #  end
+#
+#  def test_get
+#    assert_equal @r1, Category.get(@r1.id)
+#    assert_equal [@r1, @r2], Category.get(@r1.id, @r2.id)
+#    assert_equal [@r1, @r2], Category.get([@r1.id, @r2.id])
+#    assert @r1.update_attribute 'my_hidden', true
+#    assert_equal @r2, Category.get(@r2.id)
+#    assert_equal @r2, Category.get(@r1.id, @r2.id)
+#    assert_equal @r2, Category.get([@r1.id, @r2.id])
+#    assert_raise(ActiveRecord::RecordNotFound) { Category.get(@r1.id) }
+#    assert_raise(ActiveRecord::RecordNotFound) { Category.get(@r11.id) }
+#    assert_raise(ActiveRecord::RecordNotFound) { Category.get(@r111.id) }
+#    assert_equal @r2, Category.get(@r2)
+#    assert_equal @r3, Category.get(@r3)
+#  end
 
-  def test_find_with_permissions
-    assert_equal @r1, Category.permitted.find(@r1.id)
-    assert @r1.update_attribute 'my_hidden', true
-    assert_equal '', Category.permitted.inspect
-    assert_raise(ActiveRecord::RecordNotFound) { Category.permitted.find(@r1.id) }
-    assert_nil Category.permitted.find(@r11.id)
-    assert_nil Category.permitted.find(@r111.id)
-    assert_equal @r2, Category.permitted.find(@r2)
-    assert_equal @r3, Category.permitted.find(@r3)
-  end
 
 
 # TODO: Test Order by clause
