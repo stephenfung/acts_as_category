@@ -1,3 +1,7 @@
+h1. Update
+
+h3. Note that there is an edge branch open, trying to support :scope. I'd be happy about contributions. :)
+
 h1. Introduction
 
   acts_as_category (Version 1.0)
