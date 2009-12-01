@@ -116,6 +116,7 @@ class CategoryTest < Test::Unit::TestCase
   #         \_ r111       \    \_ r211
   #                       \_ r22
   #                            \_ r221
+  #
   def setup
     setup_db
     assert @r1   = Category.create! # id 1
@@ -653,49 +654,48 @@ end
 
 class ScopedCategoryTest < Test::Unit::TestCase
   
-  # Test category trees:
+  # Test category trees with scopes:
   #
-  #  |–––––––––––––– without scope ––––––––––––––|––––––––
+  #  |––––––––––––––– Catalogue @c1 –––––––––––––––|––––––––––––––– Catalogue @c2 –––––––––––––––|––– Without scope –––|
+  # 
+  #    c1r1               c1r2               c1r3    c2r1               c2r2               c2r3    r1               r2
+  #     \_ c1r11           \_ c1r21                   \_ c2r11           \_ c2r21                   \_ r11
+  #          \_ c1r111     \    \_ c1r211                  \_ c2r111     \    \_ c2r211                  \_ r111
+  #                        \_ c1r22                                      \_ c2r22
+  #                             \_ c1r221                                     \_ c2r221
   #
-  #
-  #   r1                 r2                 r3      r1                 r2                 r3
-  #    \_ r11             \_ r21                     \_ r11             \_ r21
-  #         \_ r111       \    \_ r211                    \_ r111       \    \_ r211
-  #                       \_ r22                                        \_ r22
-  #                            \_ r221                                       \_ r221
   def setup
     setup_db
-    assert @r1   = Category.create! # id 1
-    assert @r2   = Category.create! # id 2
-    assert @r3   = Category.create! # id 3
-    assert @r11  = Category.create!(:my_parent_id => @r1.id) # id 4
-    assert @r21  = Category.create!(:my_parent_id => @r2.id) # id 5
-    assert @r22  = Category.create!(:my_parent_id => @r2.id) # id 6
-    assert @r111 = Category.create!(:my_parent_id => @r11.id) # id 7
-    assert @r211 = Category.create!(:my_parent_id => @r21.id) # id 8
-    assert @r221 = Category.create!(:my_parent_id => @r22.id) # id 9
-    assert @r1   = Category.find(1)
-    assert @r2   = Category.find(2)
-    assert @r3   = Category.find(3)
-    assert @r11  = Category.find(4)
-    assert @r21  = Category.find(5)
-    assert @r22  = Category.find(6)
-    assert @r111 = Category.find(7)
-    assert @r211 = Category.find(8)
-    assert @r221 = Category.find(9)
-
-    assert @c1   = Catalogue.create!
-    assert @c1n1   = @c1.scoped_categories.create!
-    assert @c1n2   = @c1.scoped_categories.create!
-    assert @c1n3   = @c1.scoped_categories.create!
-    
-    assert @c2   = Catalogue.create!
-    assert @c2n1   = @c2.scoped_categories.create!
-    assert @c2n2   = @c2.scoped_categories.create!
-    assert @c2n3   = @c2.scoped_categories.create!
-
-    
-    Category.permissions.clear
+    # Without a defined cope
+    assert @r1   = ScopedCategory.create! # id 1
+    assert @r11  = ScopedCategory.create!(:my_parent_id => @r1.id) # id 2
+    assert @r111 = ScopedCategory.create!(:my_parent_id => @r11.id) # id 3
+    assert @r1   = ScopedCategory.find(1)
+    assert @r11  = ScopedCategory.find(2)
+    assert @r111 = ScopedCategory.find(3)
+    # Catalogue c1 via association
+    assert @c1     = Catalogue.create!
+    assert @c1r1   = @c1.scoped_categories.create!
+    assert @c1r2   = @c1.scoped_categories.create!
+    assert @c1r3   = @c1.scoped_categories.create!
+    assert @c1r11  = @c1r1.scoped_categories.create!
+    assert @c1r21  = @c1r2.scoped_categories.create!
+    assert @c1r22  = @c1r2.scoped_categories.create!
+    assert @c1r111 = @c1r11.scoped_categories.create!
+    assert @c1r211 = @c1r21.scoped_categories.create!
+    assert @c1r221 = @c1r22.scoped_categories.create!
+    # Catalogue c2 via scope parameter
+    assert @c2     = Catalogue.create!
+    assert @c2r1   = ScopedCategory.create!(:my_parent_id => @r1.id)
+    assert @c2r2   = @c2.scoped_categories.create!
+    assert @c2r3   = @c2.scoped_categories.create!
+    assert @c2r11  = @c2r1.scoped_categories.create!
+    assert @c2r21  = @c2r2.scoped_categories.create!
+    assert @c2r22  = @c2r2.scoped_categories.create!
+    assert @c2r111 = @c2r11.scoped_categories.create!
+    assert @c2r211 = @c2r21.scoped_categories.create!
+    assert @c2r221 = @c2r22.scoped_categories.create!
+    ScopedCategory.permissions.clear
   end
 
   def teardown
@@ -703,7 +703,7 @@ class ScopedCategoryTest < Test::Unit::TestCase
   end
   
   def check_cache # This is merely a method used by certain tests
-    Category.find(:all).each { |c|
+    ScopedCategory.find(:all).each { |c|
       # Note that "children_count" is a built-in Rails functionality and must not be tested here
       assert_equal c.ancestors.size,   c.my_ancestors_count
       assert_equal c.descendants.size, c.my_descendants_count
