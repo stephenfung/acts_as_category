@@ -35,12 +35,12 @@ module ActiveRecord
         # Configuration options are:
         #
         # * <tt>foreign_key</tt> - specifies the column name to use for tracking of the tree. Default is <tt>parent_id</tt>.
-        # * <tt>position</tt> - specifies the integer column name to use for ordering siblings. Default is <tt>position</tt>.
-        # * <tt>hidden</tt> - specifies a column name to use for hidden (i.e. private) flag. Default is <tt>hidden</tt>.
+        # * <tt>position</tt> - specifies the integer column name to use for ordering siblings (if the column can't be found, this feature is disabled!). Default is <tt>position</tt>.
+        # * <tt>hidden</tt> - specifies a column name to use for hidden (i.e. private) flag. It can be NULL or 0. Default is <tt>hidden</tt>.
         # * <tt>children_count</tt> - specifies a column name used for caching number of children. Default is <tt>children_count</tt>.
         # * <tt>ancestors_count</tt> - specifies a column name used for caching number of ancestors. Default is <tt>ancestors_count</tt>.
         # * <tt>descendants_count</tt> - specifies a column name used for caching number of descendants. Default is <tt>descendants_count</tt>.
-        # * <tt>counts_readonly</tt> - Will assign <tt>attr_readonly</tt> to the fields <tt>ancestors_count</tt> and <tt>descendants_count</tt>. This is experimental, thus default is <tt>false</tt>.
+        # * <tt>counts_readonly</tt> - will assign <tt>attr_readonly</tt> to the fields <tt>ancestors_count</tt> and <tt>descendants_count</tt>. This is experimental, thus default is <tt>false</tt>.
         def acts_as_category(params = {})
         
           # Load default options whenever acts_as_category is called.
@@ -85,6 +85,9 @@ module ActiveRecord
           end
                     
           # Generate scope condition
+          # Note that it is assumed that each tree (i.e. from root to all descending leafs) is within the same scope anyway!
+          # That means, that the children method doesn't need to look for any scope.
+          # The siblings method must only check for a scope, if the node is the root of a tree.
           if options[:scope].is_a?(Symbol)
             options[:scope] = "#{options[:scope]}_id".intern if options[:scope].to_s !~ /_id$/
             scope_condition_method = %(
@@ -210,7 +213,10 @@ module ActiveRecord
             end
             
           EOV
-
+          
+          # Scope out via given scope conditions for the instance
+          named_scope :scoped, lambda { |sender| { :conditions => sender.scope_condition, :order => order_clause } }
+          
           # Scope for permitted categories
           # Does *NOT* respect inherited permissions! 
           # This is intended to be used with roots only
@@ -232,11 +238,16 @@ module ActiveRecord
           
           # Deletes all prohibited categories from a find()-resultset
           def self.get(*args)
-            result = find(*args)
-            return nil if result == nil
-            result = [result] unless result.is_a? Array
+            case args.first
+              # I don't want to explain it now, but :first and :last are really hard to implement with inherited permissions :)
+              when :first then raise 'Sorry, :first and :last are not supported currently.'
+              when :last  then raise 'Sorry, :first and :last are not supported currently.'
+              else result = find(*args)
+            end
+            return nil if result.nil?
+            result = [result] unless result.is_a?(Array)
             result.delete_if { |category| !category.permitted? }
-            return result.first if result.size == 1
+            return result.first if result.size == 1 and args.first != :all
             raise ActiveRecord::RecordNotFound if result.empty?
             result
           end
@@ -277,8 +288,8 @@ module ActiveRecord
         end
 
         # Returns +array+ of children's ids, respecting permitted/hidden categories
-       	def children_ids
-       	  children_ids = []
+        def children_ids
+          children_ids = []
           self.children.each { |child| children_ids << child.id if child.permitted? } unless self.children.empty?
           children_ids
         end
@@ -291,7 +302,7 @@ module ActiveRecord
         end
 
         # Returns array of IDs of ancestors, disregarding any permissions
-       	def ancestors_ids
+        def ancestors_ids
           node, nodes = self, []
           while node.parent
             node = node.parent
@@ -301,25 +312,25 @@ module ActiveRecord
         end
 
         # Returns list of descendants, respecting permitted/hidden categories
-       	def descendants
-       	  descendants = []
-       	  self.children.each { |child|
-       	    descendants += [child] if child.permitted?
-       	    descendants += child.descendants
-       	  } unless self.children.empty?
-       	  descendants 
-       	end
+        def descendants
+          descendants = []
+          self.children.each { |child|
+            descendants += [child] if child.permitted?
+            descendants += child.descendants
+          } unless self.children.empty?
+          descendants 
+        end
 
-       	# Returns array of IDs of descendants, respecting permitted/hidden categories
-       	def descendants_ids(ignore_permissions = false)
-       	  descendants_ids = [] 
-       	  self.children.each { |child|
-       	    descendants_ids += [child.id] if ignore_permissions or child.permitted?
-       	    descendants_ids += child.descendants_ids
-       	  } unless self.children.empty?
-       	  descendants_ids
-       	end
-
+        # Returns array of IDs of descendants, respecting permitted/hidden categories
+        def descendants_ids(ignore_permissions = false)
+          descendants_ids = [] 
+          self.children.each { |child|
+            descendants_ids += [child.id] if ignore_permissions or child.permitted?
+            descendants_ids += child.descendants_ids
+          } unless self.children.empty?
+          descendants_ids
+        end
+        
         # Returns the root node of the branch, disregarding any permissions
         # This is okay, since you should never have had access to this category if the root was hidden
         def root
@@ -342,12 +353,12 @@ module ActiveRecord
 
         # Returns all siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings
-          parent ? parent.children : self.class.roots
+          parent ? parent.children : self.class.roots.scoped(self)
         end
 
         # Returns all ids of siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings_ids
-          parent ? parent.children_ids : self.class.roots.map {|x| x.id}
+          parent ? parent.children_ids : self.class.roots.scoped(self).map {|x| x.id}
         end
         
         # Immediately refresh cache of category instance
@@ -405,7 +416,7 @@ module ActiveRecord
           # Refresh current branch in any case
           self.class.refresh_cache_of_branch_with(self.root)
           # Refresh all positions
-          self.class.refresh_positions
+          self.class.refresh_positions unless order_clause.nil?
         end
         
         # Gather root.id before destruction

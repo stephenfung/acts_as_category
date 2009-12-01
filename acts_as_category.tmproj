@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>currentDocument</key>
-	<string>test/acts_as_category_test.rb</string>
+	<string>README.textile</string>
 	<key>documents</key>
 	<array>
 		<dict>
@@ -21,43 +21,28 @@
 	<integer>165</integer>
 	<key>metaData</key>
 	<dict>
-		<key>lib/active_record/acts/category.rb</key>
+		<key>README.textile</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>0</integer>
+				<integer>35</integer>
 				<key>line</key>
-				<integer>223</integer>
+				<integer>249</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>209</integer>
-		</dict>
-		<key>test/acts_as_category_test.rb</key>
-		<dict>
-			<key>caret</key>
-			<dict>
-				<key>column</key>
-				<integer>38</integer>
-				<key>line</key>
-				<integer>686</integer>
-			</dict>
-			<key>firstVisibleColumn</key>
-			<integer>0</integer>
-			<key>firstVisibleLine</key>
-			<integer>658</integer>
+			<integer>225</integer>
 		</dict>
 	</dict>
 	<key>openDocuments</key>
 	<array>
-		<string>lib/active_record/acts/category.rb</string>
-		<string>test/acts_as_category_test.rb</string>
+		<string>README.textile</string>
 	</array>
 	<key>showFileHierarchyDrawer</key>
 	<true/>
 	<key>windowFrame</key>
-	<string>{{56, 15}, {993, 758}}</string>
+	<string>{{18, 15}, {1071, 758}}</string>
 </dict>
 </plist>

@@ -1,3 +1,6 @@
+
+# Gosh, this poor helper needs some major refactoring :)
+
 module ActsAsCategoryHelper
   
   extend ActiveSupport::Memoizable

@@ -1,3 +1,6 @@
+
+# Needs some cleanup, looks not bad though in regards to approaching version 2.0
+
 module ActiveRecord
   module Acts
     module CategoryContent

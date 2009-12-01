@@ -1,119 +1,135 @@
 h1. Introduction
 
-  acts_as_category (Version 2.0 ALPHA!)
+<pre>
+  acts_as_category (Version 2.0 alpha)
+</pre>
 
 Let me explain to you what I mean by *acts_as_category*, which is yet another acts_as plugin for Ruby on Rails ActiveRecord models. Copyright is 2009 by <a href="http://www.funkensturm.com">www.funkensturm.com</a>, released under the _MIT/X11 license_, which is free for all to do whatever you want with it.
 
 h3. Demonstration
 
-Find a out-of-the-box demo application at <a href="http://github.com/funkensturm/funkengallery_demo">www.github.com/funkensturm/funkengallery_demo</a>
+Find a out-of-the-box demo application at <a href="http://github.com/funkensturm/funkengallery_demo">www.github.com/funkensturm/funkengallery_demo</a> (note that this demo is using version @1.0@, but you get the idea).
 
 h3. acts_as_tree provides functionality for trees, but lacks some things:
 
-* It has no descendants method or things like _ancestors_ids_
-* It doesn't validate _parent_id_ whatsoever, which means that you can make a category a parent of itself, etc.
-* It has no caching for ancestors and descendants
+* It has no descendants method or things like @ancestors_ids@
+* It doesn't validate @parent_id@ whatsoever, which means that you can make a category a parent of itself, etc.
+* It has no caching for ancestors and descendants (you need that to output trees using @&lt;ul&gt;@ and @&lt;li&gt;@ efficiently)
 * It won't help if you want certain users to see only certain nodes
+* There is no scoping, thus @root.siblings@ will return *all* roots, instead of this users' roots only.
 
 h3. acts_as_list is maybe not exactly what I want either:
 
-* It also has no validation or features to hide entries
-* It doesn't support a scriptaculous sortable_list to reorder the tree
+* It also has no validation or features to hide particular entries
+* It doesn't support a script.aculo.us sortable_list to reorder the tree
 * It has more than you might need, providing all these _move_just_a_little_bit_higher_ methods
 * Last but not least, it won't work together with _acts_as_tree_ unless you hack around a lot with the scope code
 
 h3. So I came up with acts_as_category, and this is what it does:
 
 * It provides a structure for infinite categories and their subcategories (similar to acts_as_tree)
+* Each user can have his very own set of category trees using the @:scope@ feature
 * It validates that no category will be the parent of its own descendant and all other variations of these foreign key things
 * You can define which hidden categories should still be permitted to the current user (through a simple class variable, thus it can easily be set per user)
-* There is a variety of instance methods such as _ancestors_, _descendants_, _descendants_ids_, _root?_, etc.
-* It has view helpers to create menus, select boxes, drag and drop ajax lists, etc.
-* It provides sorting by a position column per hierachy level, including administration methods that take parameters from the helpers
+* There is a variety of instance methods such as @ancestors@, @descendants@, @descendants_ids@, @root?@, etc.
+* It has view helpers to create menus, select boxes, drag and drop ajax lists, etc. (they need refactorization, though)
+* It optionally provides sorting by a position column per hierarchy level, including administration methods that take parameters from the helpers
 * There are automatic cache columns for children, ancestors and descendants (good for fast menu output)
-* It is well commented and documented, so that Rails beginners will learn from it, or easily make changes
+* It is well commented and documented so that Rails beginners will learn from it or easily make changes
 * I18n localization for individual error messages
 * A full unit test comes along with it
 * As you can see in the test: All options (e.g. database field names) highly configurable via a simple hash
 
 h3. What can acts_as_category NOT do?
 
-* You can't simply "turn off" certain features to speed up your application. If you really want to make this thing more efficient than it already is, _memoize_ each critical function (it work's fine, since I'm using it myself, but the unit tests will fail whenever I use memoize, that's why it's not published).
-* ActiveRecord's "find" method won't respect the hidden categories feature (but alternative methods are provided)
-* _update_ and _update_attributes_ must not be used to change the parent_id, because there is no validation callback
+* You can't simply "turn off" the caching feature to speed up your application. If you really want to make this thing more efficient than it already is, @memoize@ each critical function (it work's fine, since I'm using it myself, but the unit tests will fail whenever I use memoize, that's why it's not published. Update: maybe I should double-check this again, maybe it works by now).
+* ActiveRecord's "find" method won't respect the hidden categories feature (but a somewhat alternative method called @get@ is provided)
+* @update@ and @update_attributes@ must not be used to change the parent_id, because there is no validation callback
 * It can't make you a coffee
 
 h1. Tutorial
 
 h2. Requirements
 
-* _Rails 2.2_ or higher (works also on _Rails 2.3 edge_)
+* @Rails 2.3.5@ or higher
 
 h2. Installation
 
-Just copy the *acts_as_category* directory into _vendor/plugins_ in your Rails application.
+Just copy the *acts_as_category* directory into @vendor/plugins@ in your Rails application.
 
-To generate *HTML documentation* for all your plugins, run _rake doc:plugins_.
-To generate it just for this plugin, go to _vendor/plugins/acts_as_category_ and run _rake rdoc_.
+To generate *HTML documentation* for all your plugins, run @rake doc:plugins@.
+To generate it just for this plugin, go to @vendor/plugins/acts_as_category@ and run @rake rdoc@.
 
-To run the *Unit Test* that comes with this plugin, please read the instructions in _vendor/plugins/acts_as_category/test/acts_as_category_test.rb_.
+To run the *Unit Test* that comes with this plugin, please read the instructions in @vendor/plugins/acts_as_category/test/category_test.rb@.
 
 h2. Including acts_as_category in your model
 
-To make it work, you need to call _acts_as_category_ a ActiveRecord Model, which provides certain table columns. Like so:
+To make it work, you need to call @acts_as_category@ in a ActiveRecord model, which provides certain table columns. Like so:
 
- class Category < ActiveRecord::Base
-  acts_as_category
- end
+<pre>
+  class Category < ActiveRecord::Base
+    acts_as_category
+  end
+</pre>
 
 The migration file could look something like this:
 
- class CreateCategories < ActiveRecord::Migration
-   def self.up
-     create_table :categories, :force => true do |t|
-       # Needed by acts_as_category
-       t.integer :parent_id, :position, :children_count, :ancestors_count, :descendants_count
-       t.boolean :hidden
-       # Optional
-       t.string :name, :description
-       t.integer :pictures_count      
-     end
-   end
-   def self.down
-     drop_table :categories
-   end
- end
- 
-You can change all their names, or add additional fields like _name_, _description_, etc. Naturally it allows more associations, e.g. to your pictures in a gallery or such:
- 
- class Category < ActiveRecord::Base
-  acts_as_category
-  has_many :pictures, :counter_cache => true
- end
+<pre>
+  class CreateCategories < ActiveRecord::Migration
+    def self.up
+      create_table :categories, :force => true do |t|
+        # Needed by acts_as_category
+        t.integer :parent_id, :children_count, :ancestors_count, :descendants_count
+        t.boolean :hidden
+        # Optional
+        t.string :name, :description
+        t.integer :position, :pictures_count
+      end
+    end
+    def self.down
+      drop_table :categories
+    end
+  end
+</pre>
+
+You can change all the column names, or add additional fields like @name@, @description@, etc. Naturally it allows more associations, e.g. to your pictures in a gallery or such:
+
+<pre>
+  class Category < ActiveRecord::Base
+    acts_as_category
+    has_many :pictures, :counter_cache => true
+  end
+</pre>
 
 To change the names of the table columns, just pass on the correct parameters with the alternate names:
 
+<pre>
   class Category < ActiveRecord::Base
-   acts_as_category :foreign_key => 'parent', :position => 'sortby', cache_ancestors => 'count_of_ancestors'
+    acts_as_category :foreign_key => 'parent', :position => 'sortby', cache_ancestors => 'my_count_of_ancestors'
   end
+</pre>
 
-Sorting is by position (default), or by anything else you want:
+Sorting is by position (default), or by anything else you want. Note that, if the column cannot be found, this feature is simply disabled.
 
+<pre>
   class Category < ActiveRecord::Base
-   acts_as_category :order => 'name'
+    acts_as_category :order => 'name'
   end
-  
-Just have a look into the _vendor/plugins/acts_as_category/lib/active_record/acts/category.rb_ file to find out which options there are
+</pre>
 
-h2. Including acts_as_category_content_ in your model
+Just have a look into the @vendor/plugins/acts_as_category/lib/active_record/acts/category.rb@ file to find out which options there are
 
-acts_as_category provides a function called _.permitted?_ to find out whether a category is visible to the current user permissions. However, you might want to have that feature for things that are in your category, say pictures or articles. That way you could individually restrict access to these things. Here you go, just tell your content to acts_as_category_content and say which one is the corresponding model ('category' is default if you leave it out). Like so:
+h2. Including acts_as_category_content in your model
 
- class Picture < ActiveRecord::Base
-   acts_as_category_content, :category => 'my_category_model'
- end
+@acts_as_category@ provides a function called @.permitted?@ to find out whether a category is visible according to the current user permissions. However, you might want to have that feature for things that are *inside* your category, say pictures or articles. That way you could individually restrict access to these things. Just tell your content to @acts_as_category_content@ and define the corresponding model (@category@ is default if you leave it out). Like so:
 
-This will also validate the associations. However, it will currently not allow a category content to be in a category which has subcategories. It will be optional in future versions, just uncomment the validation in the _vendor/plugins/acts_as_category/lib/active_record/acts/category_content.rb_ file to change this.
+<pre>
+  class Picture < ActiveRecord::Base
+    acts_as_category_content, :category => 'my_category_model'
+  end
+</pre>
+
+This will also validate the associations. However, it will currently not allow a category content to be in a category which has subcategories. It will be optional in future versions, just uncomment the validation in the @vendor/plugins/acts_as_category/lib/active_record/acts/category_content.rb@ file to change this.
 
 h2. Usage
 
@@ -124,51 +140,73 @@ If everything is set up, you can actually use the plugin. Let's say you have tre
         \_ subchild1            \subchild3
         \_ subchild2                \subchild4
 
-Then you can run the following methods. For more specific information about return values, please look at the HTML documentation generated by RDoc. 
+Then you can run the following methods. For more specific information about return values, please look at the HTML documentation generated by RDoc.
 
- Category.get(1)
+<pre>
+  Category.get(1)
+</pre>
 
 Returns the category with the id 1
 
+<pre>
  Category.roots
+</pre>
 
 Returns an array with all root categories [root1, root2]
  
 (For the rest let's assume, that root1 = Category.get(1), etc...)
  
- root1.root?
+<pre>
+  root1.root?
+</pre>
 
 Will return true, because root is a root category (child1.root? will return false)
   
- child1.parent
+<pre>
+  child1.parent
+</pre>
 
 Returns root (root.parent will return nil, because root has none)
  
- root.children
+<pre>
+  root.children
+</pre>
 
 Returns an array with [subchild1, subchild2].
 
- subchild1.ancestors
+<pre>
+  subchild1.ancestors
+</pre>
 
 Returns an array with [child1, root1] (root1.ancestors will return an empty array [], because root has none)
  
- subchild1.ancestors_ids
+<pre>
+  subchild1.ancestors_ids
+</pre>
 
 Returns the same array, but ids instead of categories [2,1]
  
- root1.descendants
+<pre>
+  root1.descendants
+</pre>
 
 Returns an array with [child1, subchild1, subchild2] (subchild1.descendants will return an empty array [], because it has none)
  
- root1.descendants_ids
+<pre>
+  root1.descendants_ids
+</pre>
 
 Returns the same array, but ids instead of categories [2,3,4]
  
- root1.siblings
+<pre>
+  root1.siblings
+</pre>
 
 Returns an array with all siblings [root2] (child1.siblings returns an empty array [], because it has no siblings)
  
- subchild1.self_and_siblings
+<pre>
+  subchild1.self_and_siblings
+</pre>
 
 Returns an array [subchild1, subchild2], just like siblings, only with itself as well
 
@@ -176,110 +214,192 @@ h2. Usage with permissions
 
 Let's bring the *permissions* feature into the game. It let's you show categories for certain users, even though the categories might be flagged "hidden". If a category is hidden, it is practically invisible unless you have permissions.
   
+<pre>
   child1.hidden = true
   subchild1.hidden = true
+</pre>
 
 Sets child1 and subchild1 to be hidden, they are now invisible to anyone
   
+<pre>
   root1
    \_ child1             (hidden)
         \_ subchild1     (hidden)
         \_ subchild2     (can't be found either, because child1 is hidden)
+</pre>
   
 Your tree will only return this:
   
+<pre>
   root1
+</pre>
 
 Now we set permissions:
 
+<pre>
   Category.permissions = [2]   # i.e. [child1.id]
+</pre>
   
 Say child1 has the id 2. We just allowed the current user to see it though it's hidden.
 (The idea is to set this class variable array whenever a user logs in e.g.)
   
 Internally this is the structure of the tree:
   
+<pre>
   root1
-   \_ child1            (permitted though it is hidden)
+   \_ child1            (permitted, even though it is hidden)
         \_ subchild1    (still hidden to you!)
         \_ subchild2
+</pre>
   
 If you try to access it, it will look like this:
   
+<pre>
   root1
    \_ child1
         \_ subchild2
+</pre>
   
+<pre>
   root1.hidden?
+</pre>
 
 Returns false, because root1 is visible
   
+<pre>
   child1.hidden?
+</pre>
 
 Returns false, because child1 has the attribute hidden on true, regardless of permissions
   
+<pre>
   child1.permitted?
+</pre>
 
 Returns true, because child1 is visible to you one way or the other (i.e. it's not hidden or you have permissions)
   
 Respectively, using acts_as_content you will be able to use the same function on a model which belongs_to a category.
 
+<pre>
   picture_of_child1.permitted?
+</pre>
 
 Returns the same thing as child1.permitted?
 
+<pre>
   child1.children
+</pre>
 
 Guess what, it returns only subchild1
   
-  Category.get(4)    # Trying to access subchild2
+<pre>
+  Category.get(4)    # Trying to access subchild
+</pre>
 
 Returns an empty array, because of an attempt to access a hidden category. This function respects permissions
   
 Note that you can still use Category.find(1) to override everything and get any category, regardless of it's status. So you should never use it unless you really must. However, if you do have to use it, you can generate an SQL addition for your condition like so:
 
+<pre>
   Category.permissions = [1,2,3]
   Category.find(:all, :condition => Category.where_permitted, [... other options])
+</pre>
 
 That will be considered: 
 
+<pre>
   Category.find(:all, :condition => " (hidden IS NULL OR id IN (1,2,3)) ", [... other options])
-  
+</pre>
+
 Please have a look at the comments for each function and the unit test to see, which method respects permissions and which one doesn't (e.g. ancestors).
+
+h2. Scopes
+
+If you have something, which @has_many@ categories, like so: 
+
+<pre>
+  class Catalogue < ActiveRecord::Base
+    has_many :scoped_categories
+  end
+</pre>
+
+<pre>
+  class ScopedCategory < ActiveRecord::Base
+    belongs_to :catalogue
+    acts_as_category :foreign_key => 'my_parent_id',
+                     :position => 'my_position',
+                     :hidden => 'my_hidden',
+                     :scope => :catalogue,
+                     :children_count => 'my_children_count',
+                     :ancestors_count => 'my_ancestors_count',
+                     :descendants_count => 'my_descendants_count',
+                     :counts_readonly => true
+  end
+</pre>
+
+You can easily use @:scope@ to let @acts_as_category@ respect that.
+
+<pre>
+  ScopedCategory.roots.first.siblings
+</pre>
+
+Will thus only return the siblings, which correspond to the same @Catalogue@.
+
+<pre>
+  Catalogue.first.scoped_categories.roots
+</pre>
+
+Can be used to find all visible roots for this user.
+
+<pre>
+  Catalogue.first.scoped_categories.create!
+</pre>
+
+Will create a category root in the scope of that Catalogue. You get the idea. Please notice, that it is assumed that every tree is in one scope anyway! So @children@ has nothing to do with scope, it simply returns the children.
+
+h2. FAQ
 
 *Why is _find_ not respecting hidden?*
 
 I didn't feel comfortable overwriting the find method for Categories and it is not really needed.
 
-*Why are _ancestors_, _ancestors_ids_ and _self.parent_ not respecting hidden/permissions?*
+*Why are @ancestors@, @ancestors_ids@ and @self.parent@ not respecting hidden/permissions?*
 
 Because the whole idea of hidden is to exclude descendants of an hidden Category as well, thus the ancestors of a category you can access anyway are never going to be hidden.
-  
-h2. Add positioning for ordering
 
-Let's say you have a gallery and use acts_as_category on your categories. Then the categories will not be ordered by name (unless you want them to), but by a individual order. For this we have the position column.
+h2. Add AJAX positioning for ordering
+
+Let's say you have a gallery and use acts_as_category on your categories. Then the categories will not be ordered by name (unless you want them to), but by a individual order. For this we have the position column. If the @:position@ parameter refers to a non-existent column, this feature is simply disabled.
 
 You can manually update these positions, but I strongly recommend to let this be done by the sortable_category helper and the Category.update_positions(params) method like so:
 
-In your layout, make sure that you have all the JavaScripts included, that will allow drag and drop with scriptaculous, etc. For the beginning, let's just add all:
+In your layout, make sure that you have all the JavaScripts included, that will allow drag and drop with script.aculo.us, etc. For the beginning, let's just add all:
 
+<pre>
   <%= javascript_include_tag :all %>
+</pre>
 
 Then, in your view, you can call this little helper to generate a drag and drop list where you can re-sort the positions. Remember to provide the name of the model to use:
 
+<pre>
   <%= aac_sortable_tree Category %>
+</pre>
 
 Finally, in your controller create an action method like this:
 
+<pre>
   def update_positions
     Category.update_positions(params)
     render :nothing => true
   end
+</pre>
   
 And you can already try it. You can change the URL to that action method like this:
 
+<pre>
   <%= aac_sortable_tree(Category, {:action => :update_positions}) %>
   <%= aac_sortable_tree(Category, {:controller => :mycontroller, :action => :update_positions}) %>
+</pre>
 
 h2. Ask questions and have fun!
 
