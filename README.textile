@@ -1,6 +1,6 @@
 h1. Introduction
 
-  acts_as_category (Version 1.0)
+  acts_as_category (Version 2.0 ALPHA!)
 
 Let me explain to you what I mean by *acts_as_category*, which is yet another acts_as plugin for Ruby on Rails ActiveRecord models. Copyright is 2009 by <a href="http://www.funkensturm.com">www.funkensturm.com</a>, released under the _MIT/X11 license_, which is free for all to do whatever you want with it.
 
