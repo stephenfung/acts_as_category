@@ -1,6 +1,6 @@
 h1. Update
 
-h3. Note that there is an edge branch open, trying to support :scope. I'd be happy about contributions. :)
+h3. <span style="color:red;">Note that there is an edge branch open, trying to support :scope. I'd be happy about contributions. :)</span>
 
 h1. Introduction
 
