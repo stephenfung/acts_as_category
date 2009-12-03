@@ -1,3 +1,5 @@
+h1. <span style="color:red;">Note that there is an edge branch open, trying to support :scope. I'd be happy about contributions. :)</span> It's here: "you click.":http://github.com/funkensturm/acts_as_category/tree/edge
+
 h1. Introduction
 
 <pre>
