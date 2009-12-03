@@ -51,7 +51,7 @@ h1. Tutorial
 
 h2. Requirements
 
-* @Rails 2.3.5@ or higher
+* @Rails 2.3.5@ or higher (maybe lower, as well :)
 
 h2. Installation
 
@@ -105,7 +105,9 @@ To change the names of the table columns, just pass on the correct parameters wi
 
 <pre>
   class Category < ActiveRecord::Base
-    acts_as_category :foreign_key => 'parent', :position => 'sortby', cache_ancestors => 'my_count_of_ancestors'
+    acts_as_category :foreign_key => 'my_parents_are_here_id',
+                     :position => 'i_keep_track_of_positions_here',
+                     :cache_ancestors => 'my_count_of_ancestors'
   end
 </pre>
 
@@ -113,7 +115,7 @@ Sorting is by position (default), or by anything else you want. Note that, if th
 
 <pre>
   class Category < ActiveRecord::Base
-    acts_as_category :order => 'name'
+    acts_as_category :order_by => 'name'
   end
 </pre>
 
