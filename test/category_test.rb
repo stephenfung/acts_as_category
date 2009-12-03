@@ -17,15 +17,20 @@ require File.join File.dirname(__FILE__), 'test_helper'
 # Defining Models
 # –––––––––––––––
 
-class Catalogue < ActiveRecord::Base
-  has_many :scoped_categories
-end
-
 class Category < ActiveRecord::Base
-  belongs_to :catalogue
   acts_as_category :foreign_key => 'my_parent_id',
                    :position => 'my_position',
                    :order_by => 'my_position',
+                   :hidden => 'my_hidden',
+                   :children_count => 'my_children_count',
+                   :ancestors_count => 'my_ancestors_count',
+                   :descendants_count => 'my_descendants_count',
+                   :counts_readonly => true
+end
+
+class UnpositionedCategory < ActiveRecord::Base
+  acts_as_category :foreign_key => 'my_parent_id',
+                   :order_by => 'id DESC',
                    :hidden => 'my_hidden',
                    :children_count => 'my_children_count',
                    :ancestors_count => 'my_ancestors_count',
@@ -597,6 +602,19 @@ class CategoryTest < Test::Unit::TestCase
     assert @n2.update_attribute('my_position', 3)
     assert @n3.update_attribute('my_position', 1)
     assert_equal [@n3, @n1, @n2], Category.find(@n3.id).self_and_siblings
+  end
+  
+  def test_order_by_without_position_column
+    teardown_db
+    setup_db
+    assert @n1 = UnpositionedCategory.create!
+    assert @n2 = UnpositionedCategory.create!
+    assert @n3 = UnpositionedCategory.create!
+    assert @n11 = UnpositionedCategory.create!(:my_parent_id => @n1.id)
+    assert @n12 = UnpositionedCategory.create!(:my_parent_id => @n1.id)
+    assert @n13 = UnpositionedCategory.create!(:my_parent_id => @n1.id)
+    assert_equal [@n3, @n2, @n1], UnpositionedCategory.roots
+    assert_equal [@n13, @n12, @n11], UnpositionedCategory.find(@n1.id).children
   end
   
 end
