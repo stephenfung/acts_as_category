@@ -25,6 +25,7 @@ class Category < ActiveRecord::Base
   belongs_to :catalogue
   acts_as_category :foreign_key => 'my_parent_id',
                    :position => 'my_position',
+                   :order_by => 'my_position',
                    :hidden => 'my_hidden',
                    :children_count => 'my_children_count',
                    :ancestors_count => 'my_ancestors_count',

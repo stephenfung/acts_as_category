@@ -35,7 +35,8 @@ module ActiveRecord
         # Configuration options are:
         #
         # * <tt>foreign_key</tt> - specifies the column name to use for tracking of the tree. Default is <tt>parent_id</tt>.
-        # * <tt>position</tt> - specifies the integer column name to use for ordering siblings (if the column can't be found, this feature is disabled!). Default is <tt>position</tt>.
+        # * <tt>position</tt> - specifies the integer column name to use for manually ordering siblings (if the column can't be found, this feature is disabled!). Default is <tt>position</tt>.
+        # * <tt>order_by</tt> - specifies an arbitrary column to use for ordering categories. Default is <tt>position</tt>.
         # * <tt>hidden</tt> - specifies a column name to use for hidden (i.e. private) flag. It can be NULL or 0. Default is <tt>hidden</tt>.
         # * <tt>children_count</tt> - specifies a column name used for caching number of children. Default is <tt>children_count</tt>.
         # * <tt>ancestors_count</tt> - specifies a column name used for caching number of ancestors. Default is <tt>ancestors_count</tt>.
@@ -45,13 +46,13 @@ module ActiveRecord
         
           # Load default options whenever acts_as_category is called.
           # After that, overwrite them with the individual settings passed by <tt>params</tt>.
-          options = { :foreign_key => 'parent_id', :position => 'position', :hidden => 'hidden', :scope => '1 = 1', :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count', :counts_readonly => false }
+          options = { :foreign_key => 'parent_id', :position => 'position', :order_by => 'position', :hidden => 'hidden', :scope => '1 = 1', :children_count => 'children_count', :ancestors_count => 'ancestors_count', :descendants_count => 'descendants_count', :counts_readonly => false }
           options.update(params) if params.is_a?(Hash)
           
           # Create a class association to itself.
           # Note that subcategories will be destroyed whenever a parent is deleted.
           belongs_to :parent, :class_name => name, :foreign_key => options[:foreign_key], :counter_cache => options[:children_count]
-          has_many :children, :class_name => name, :foreign_key => options[:foreign_key], :order => options[:position], :dependent => :destroy
+          has_many :children, :class_name => name, :foreign_key => options[:foreign_key], :order => options[:order_by], :dependent => :destroy
 
           # Substantial validations
           before_validation           :validate_foreign_key
@@ -76,15 +77,7 @@ module ActiveRecord
           # Define class variables
           class_variable_set :@@permissions, []
           
-          # Generate an order clause according and validation to whether positions are used or not
-          if column_names.include? options[:position]
-            validates_numericality_of options[:position], :only_integer => true, :greater_than => 0
-            order_clause_value = "%Q{#{options[:position]}}"
-          else
-            order_clause_value = 'nil'
-          end
-                    
-          # Generate scope condition
+          # Generate instance method for scope condition
           # Note that it is assumed that each tree (i.e. from root to all descending leafs) is within the same scope anyway!
           # That means, that the children method doesn't need to look for any scope.
           # The siblings method must only check for a scope, if the node is the root of a tree.
@@ -131,42 +124,20 @@ module ActiveRecord
           # Another reason is, that we want to overwrite the association method <tt>children</tt>, but this
           # association doesn't exist before acts_as_category is actually called. So we need class_eval.
           
-          class_eval <<-EOV
-
-            # ––––––––––––––––––––––––––
-            # Generated instance methods
-            # ––––––––––––––––––––––––––
+          class_eval <<-END
+          
+            # –––––––––––––––––––––––
+            # Generated class methods
+            # –––––––––––––––––––––––
             
-            # This will actually include the InstanceMethods to your model
-            include ActiveRecord::Acts::Category::InstanceMethods
-
-            # Include previously generated instance methods
-            #{scope_condition_method}
-
-            # Include previously generated class methods
-            def self.order_clause() #{order_clause_value} end
-
             # Define instance getter methods to keep track of the column names
             def self.parent_id_column()         %Q{#{options[:foreign_key]}}       end
             def self.position_column()          %Q{#{options[:position]}}          end
+            def self.order_by()                 %Q{#{options[:order_by]}}          end
             def self.hidden_column()            %Q{#{options[:hidden]}}            end
             def self.children_count_column()    %Q{#{options[:children_count]}}    end
             def self.ancestors_count_column()   %Q{#{options[:ancestors_count]}}   end
             def self.descendants_count_column() %Q{#{options[:descendants_count]}} end
-
-            # Overwrite the children association method, so that it will respect permitted/hidden categories
-            # Note: If you request the children of a not-permitted category, the result will be an empty array
-            #
-            alias :orig_children :children
-            def children
-              result = orig_children
-              result.delete_if { |child| !child.permitted? }
-              result
-            end
-
-            ###########################
-            # Generated class methods #
-            ###########################
                 
             # Update cache columns of a whole branch, which includes the given +category+ or its +id+.
             #
@@ -212,24 +183,44 @@ module ActiveRecord
               }
             end
             
-          EOV
+            # ––––––––––––––––––––––––––
+            # Generated instance methods
+            # ––––––––––––––––––––––––––
+            
+            # This will actually include the InstanceMethods to your model
+            include ActiveRecord::Acts::Category::InstanceMethods
+
+            # Generating the scope_condition instance method
+            #{scope_condition_method}
+
+            # Overwrite the children association method, so that it will respect permitted/hidden categories
+            # Note: If you request the children of a not-permitted category, the result will be an empty array
+            #
+            alias :orig_children :children
+            def children
+              result = orig_children
+              result.delete_if { |child| !child.permitted? }
+              result
+            end
+            
+          END
           
           # Scope out via given scope conditions for the instance
-          named_scope :scoped, lambda { |sender| { :conditions => sender.scope_condition, :order => order_clause } }
+          named_scope :scoped, lambda { |sender| { :conditions => sender.scope_condition, :order => order_by } }
           
           # Scope for permitted categories
           # Does *NOT* respect inherited permissions! 
           # This is intended to be used with roots only
           named_scope :permitted, lambda {
             if permissions.empty?
-              { :conditions => "#{hidden_column} IS NULL OR #{hidden_column}=0", :order => order_clause }
+              { :conditions => "#{hidden_column} IS NULL OR #{hidden_column}=0", :order => order_by }
             else
-              { :conditions => ["#{hidden_column} IS NULL OR #{hidden_column}=0 OR id IN (?)", class_variable_get(:@@permissions)], :order => order_clause }
+              { :conditions => ["#{hidden_column} IS NULL OR #{hidden_column}=0 OR id IN (?)", class_variable_get(:@@permissions)], :order => order_by }
             end
           }
 
           # Returns all root +categories+, disregarding permissions
-          named_scope :roots!, lambda { { :conditions => { parent_id_column => nil }, :order => order_clause } }
+          named_scope :roots!, lambda { { :conditions => { parent_id_column => nil }, :order => order_by } }
 
           # Returns all root +categories+, respecting permitted/hidden ones
           def self.roots
@@ -264,10 +255,11 @@ module ActiveRecord
         ####################
         # Instance methods #
         ####################
+        
 
         # These are just shortcuts to keep track of the class wide variables
         def permissions()              self.class.permissions              end
-        def order_clause()             self.class.order_clause             end
+        def order_by()                 self.class.order_by                 end
         # And column names defined in the class
         def parent_id_column()         self.class.parent_id_column         end
         def position_column()          self.class.position_column          end
@@ -416,7 +408,7 @@ module ActiveRecord
           # Refresh current branch in any case
           self.class.refresh_cache_of_branch_with(self.root)
           # Refresh all positions
-          self.class.refresh_positions unless order_clause.nil?
+          self.class.refresh_positions if self.class.column_names.include? position_column
         end
         
         # Gather root.id before destruction
