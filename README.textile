@@ -6,10 +6,6 @@ h1. Introduction
 
 Let me explain to you what I mean by *acts_as_category*, which is yet another acts_as plugin for Ruby on Rails ActiveRecord models. Copyright is 2009 by <a href="http://www.funkensturm.com">www.funkensturm.com</a>, released under the _MIT/X11 license_, which is free for all to do whatever you want with it.
 
-h3. Demonstration
-
-Find a out-of-the-box demo application at <a href="http://github.com/funkensturm/funkengallery_demo">www.github.com/funkensturm/funkengallery_demo</a> (note that this demo is using version @1.0@, but you get the idea).
-
 h3. acts_as_tree provides functionality for trees, but lacks some things:
 
 * It has no descendants method or things like @ancestors_ids@
@@ -47,13 +43,15 @@ h3. What can acts_as_category NOT do?
 * @update@ and @update_attributes@ must not be used to change the parent_id, because there is no validation callback
 * It can't make you a coffee
 
-h1. Tutorial
+h3. Demonstration
 
-h2. Requirements
+Find a out-of-the-box demo application at <a href="http://github.com/funkensturm/funkengallery_demo">www.github.com/funkensturm/funkengallery_demo</a> (note that this demo is using version @1.0@, but you get the idea).
+
+h3. Requirements
 
 * @Rails 2.3.5@ or higher (maybe lower, as well :)
 
-h2. Installation
+h3. Installation
 
 Just copy the *acts_as_category* directory into @vendor/plugins@ in your Rails application.
 
@@ -62,28 +60,25 @@ To generate it just for this plugin, go to @vendor/plugins/acts_as_category@ and
 
 To run the *Unit Test* that comes with this plugin, please read the instructions in @vendor/plugins/acts_as_category/test/category_test.rb@.
 
+h1. Documentation
+
 h2. Including acts_as_category in your model
 
-To make it work, you need to call @acts_as_category@ in a ActiveRecord model, which provides certain table columns. Like so:
-
-<pre>
-  class Category < ActiveRecord::Base
-    acts_as_category
-  end
-</pre>
-
-The migration file could look something like this:
+First of all you need a database table which looks something like this. Of course you can add arbitrary fields like @name@, @description@, etc.
 
 <pre>
   class CreateCategories < ActiveRecord::Migration
     def self.up
       create_table :categories, :force => true do |t|
+
         # Needed by acts_as_category
         t.integer :parent_id, :children_count, :ancestors_count, :descendants_count
         t.boolean :hidden
+        
         # Optional
         t.string :name, :description
         t.integer :position, :pictures_count
+        
       end
     end
     def self.down
@@ -92,34 +87,45 @@ The migration file could look something like this:
   end
 </pre>
 
-You can change all the column names, or add additional fields like @name@, @description@, etc. Naturally it allows more associations, e.g. to your pictures in a gallery or such:
+Notice that the mandatory table names above are needed by default (i.e. @parent_id@, @children_count@, @ancestors_count@, @descendants_count@, @hidden@). To make it work, you need to call @acts_as_category@ in the corresponding ActiveRecord model:
 
 <pre>
   class Category < ActiveRecord::Base
     acts_as_category
-    has_many :pictures, :counter_cache => true
   end
 </pre>
 
-To change the names of the table columns, just pass on the correct parameters with the alternate names:
+If your database table has different column names, you can modify them. Note that @:position@ and @:order_by@ are optional. Using @:order_by@ you can define any SQL ORDER BY statement. Default is @position@.
 
 <pre>
   class Category < ActiveRecord::Base
-    acts_as_category :foreign_key => 'my_parents_are_here_id',
-                     :position => 'i_keep_track_of_positions_here',
-                     :cache_ancestors => 'my_count_of_ancestors'
+    acts_as_category :foreign_key => 'my_parent_id',
+                     :hidden => 'my_hidden',
+                     :children_count => 'my_children_count',
+                     :ancestors_count => 'my_ancestors_count',
+                     :descendants_count => 'my_descendants_count',
+                     :position => 'my_position',
+                     :order_by => 'title, id ASC'
   end
 </pre>
 
-Sorting is by position (default), or by anything else you want. Note that, if the column cannot be found, this feature is simply disabled.
+You can also have associations with other models. If you have a @belongs_to@ association, you must also provide a @:scope@. The scope can be a table column or even a full SQL condition. 
 
 <pre>
-  class Category < ActiveRecord::Base
-    acts_as_category :order_by => 'name'
+  class Catalogue < ActiveRecord::Base
+    has_many :scoped_categories
   end
 </pre>
 
-Just have a look into the @vendor/plugins/acts_as_category/lib/active_record/acts/category.rb@ file to find out which options there are
+<pre>
+  class ScopedCategory < ActiveRecord::Base
+    belongs_to :catalogue
+    has_many   :pictures, :counter_cache => true
+    acts_as_category :scope => :catalogue
+  end
+</pre>
+
+Note that it is assumed that a tree is in the same scope by any means. I.e. @Category.root.first.children@ will *not* respect the scope, but @Category.roots.first.siblings@ will (because the roots may be in different scopes, whereas the children or a category will assumably have the same scope).
 
 h2. Including acts_as_category_content in your model
 
@@ -133,7 +139,7 @@ h2. Including acts_as_category_content in your model
 
 This will also validate the associations. However, it will currently not allow a category content to be in a category which has subcategories. It will be optional in future versions, just uncomment the validation in the @vendor/plugins/acts_as_category/lib/active_record/acts/category_content.rb@ file to change this.
 
-h2. Usage
+h2. Tutorial
 
 If everything is set up, you can actually use the plugin. Let's say you have trees like this and your model is called *Category*.
 
@@ -147,83 +153,59 @@ If everything is set up, you can actually use the plugin. Let's say you have tre
 Then you can run the following methods. For more specific information about return values, please look at the HTML documentation generated by RDoc.
 
 <pre>
-  Category.get(1)
+  Category.get(1)     # Returns category with id 1
+  Category.get(1,5)   # Returns array of categories with ids 1 and 5
 </pre>
-
-Returns the category with the id 1
 
 <pre>
- Category.roots
+ Category.roots       # Returns an array with all permitted root categories [root1, root2]
+ Category.roots!      # Same thing, but returns roots regardless of permissions (see further below)
 </pre>
-
-Returns an array with all root categories [root1, root2]
  
 (For the rest let's assume, that root1 = Category.get(1), etc...)
  
 <pre>
-  root1.root?
+  root1.root?         # Returns true, because root is a root category
+  child1.root?        # Returns false
 </pre>
-
-Will return true, because root is a root category (child1.root? will return false)
   
 <pre>
-  child1.parent
+  child1.parent       # Returns root
+  root.parent         # Returns nil, because root has no parent
 </pre>
-
-Returns root (root.parent will return nil, because root has none)
- 
-<pre>
-  root.children
-</pre>
-
-Returns an array with [subchild1, subchild2].
 
 <pre>
-  subchild1.ancestors
+  root.children       # Returns an array with [subchild1, subchild2].
 </pre>
 
-Returns an array with [child1, root1] (root1.ancestors will return an empty array [], because root has none)
- 
 <pre>
-  subchild1.ancestors_ids
+  subchild1.ancestors       # Returns an array with [child1, root1]
+  subchild1.ancestors_ids   # Returns the same array, but ids instead of categories [2,1]
+  root1.ancestors           # Returns an empty array [], because root has none  
+</pre>                      
+                            
+<pre>                       
+  root1.descendants         # Returns an array with [child1, subchild1, subchild2]
+  root1.descendants_ids     # Returns the same array, but ids instead of categories [2,3,4]
+  subchild1.descendants     # Returns an empty array [], because it has none
 </pre>
 
-Returns the same array, but ids instead of categories [2,1]
- 
 <pre>
-  root1.descendants
+  root1.siblings                # Returns an array with all siblings [root2] 
+  child1.siblings               # Returns an empty array [], because it has no siblings
+  subchild1.self_and_siblings   # Returns an array [subchild1, subchild2], just like siblings, only with itself as well
 </pre>
-
-Returns an array with [child1, subchild1, subchild2] (subchild1.descendants will return an empty array [], because it has none)
- 
-<pre>
-  root1.descendants_ids
-</pre>
-
-Returns the same array, but ids instead of categories [2,3,4]
- 
-<pre>
-  root1.siblings
-</pre>
-
-Returns an array with all siblings [root2] (child1.siblings returns an empty array [], because it has no siblings)
- 
-<pre>
-  subchild1.self_and_siblings
-</pre>
-
-Returns an array [subchild1, subchild2], just like siblings, only with itself as well
 
 h2. Usage with permissions
 
-Let's bring the *permissions* feature into the game. It let's you show categories for certain users, even though the categories might be flagged "hidden". If a category is hidden, it is practically invisible unless you have permissions.
-  
+Let's bring *permissions* into the game. It let's you show categories for certain users, even though the categories might be flagged "hidden". If a category is hidden, it is practically invisible unless you have permissions.
+
 <pre>
   child1.hidden = true
   subchild1.hidden = true
 </pre>
 
-Sets child1 and subchild1 to be hidden, they are now invisible to anyone
+Sets child1 and subchild1 to be hidden, they are now invisible to everyone
   
 <pre>
   root1
@@ -232,8 +214,8 @@ Sets child1 and subchild1 to be hidden, they are now invisible to anyone
         \_ subchild2     (can't be found either, because child1 is hidden)
 </pre>
   
-Your tree will only return this:
-  
+Your tree will look like this to the world:
+
 <pre>
   root1
 </pre>
@@ -241,18 +223,17 @@ Your tree will only return this:
 Now we set permissions:
 
 <pre>
-  Category.permissions = [2]   # i.e. [child1.id]
+  Category.permissions = [2]    # i.e. [child1.id]
 </pre>
-  
-Say child1 has the id 2. We just allowed the current user to see it though it's hidden.
-(The idea is to set this class variable array whenever a user logs in e.g.)
+
+Say child1 has the id 2. We just allowed the current user to see it though it's hidden. (The idea is to set this class variable array whenever a user logs in).
   
 Internally this is the structure of the tree:
   
 <pre>
   root1
-   \_ child1            (permitted, even though it is hidden)
-        \_ subchild1    (still hidden to you!)
+   \_ child1            (still hidden, but you have permissions now)
+        \_ subchild1    (still hidden to you)
         \_ subchild2
 </pre>
   
@@ -265,101 +246,53 @@ If you try to access it, it will look like this:
 </pre>
   
 <pre>
-  root1.hidden?
+  root1.permitted?      # Returns true, because root1 is not hidden
+  child1.permitted?     # Returns true, because it's hidden but you have permissions
+  subchild1.permitted?  # Returns false, because it inherits "hiddenness" by child1 and you have no explicit rights for subchild1
+  subchild2.permitted?  # Returns true, because it's not hidden and you have permissions for child1
 </pre>
 
-Returns false, because root1 is visible
-  
+Respectively, using acts_as_content you will be able to use the same function on a model which belongs_to a category:
+
 <pre>
-  child1.hidden?
+  picture_of_child1.permitted?    # Returns the same thing as child1.permitted?
 </pre>
 
-Returns false, because child1 has the attribute hidden on true, regardless of permissions
-  
-<pre>
-  child1.permitted?
-</pre>
-
-Returns true, because child1 is visible to you one way or the other (i.e. it's not hidden or you have permissions)
-  
-Respectively, using acts_as_content you will be able to use the same function on a model which belongs_to a category.
+Note that you can still use Category.find(1) to override everything and get any category, regardless of it's status. So you should never use it unless you really have to. Here is an alternative method to pick a permitted category directly:
 
 <pre>
-  picture_of_child1.permitted?
-</pre>
-
-Returns the same thing as child1.permitted?
-
-<pre>
-  child1.children
-</pre>
-
-Guess what, it returns only subchild1
-  
-<pre>
-  Category.get(4)    # Trying to access subchild
-</pre>
-
-Returns an empty array, because of an attempt to access a hidden category. This function respects permissions
-  
-Note that you can still use Category.find(1) to override everything and get any category, regardless of it's status. So you should never use it unless you really must. However, if you do have to use it, you can generate an SQL addition for your condition like so:
-
-<pre>
-  Category.permissions = [1,2,3]
-  Category.find(:all, :condition => Category.where_permitted, [... other options])
-</pre>
-
-That will be considered: 
-
-<pre>
-  Category.find(:all, :condition => " (hidden IS NULL OR id IN (1,2,3)) ", [... other options])
+  child1.children     # Returns only subchild1
+  Category.get(4)     # Returns an empty array, trying to access forbidden subchild2
 </pre>
 
 Please have a look at the comments for each function and the unit test to see, which method respects permissions and which one doesn't (e.g. ancestors).
 
 h2. Scopes
 
-If you have something, which @has_many@ categories, like so: 
-
-<pre>
-  class Catalogue < ActiveRecord::Base
-    has_many :scoped_categories
-  end
-</pre>
+If you are using something, which @has_many@ categories, like so: 
 
 <pre>
   class ScopedCategory < ActiveRecord::Base
     belongs_to :catalogue
-    acts_as_category :foreign_key => 'my_parent_id',
-                     :position => 'my_position',
-                     :hidden => 'my_hidden',
-                     :scope => :catalogue,
-                     :children_count => 'my_children_count',
-                     :ancestors_count => 'my_ancestors_count',
-                     :descendants_count => 'my_descendants_count',
-                     :counts_readonly => true
+    acts_as_category :scope => :catalogue
   end
 </pre>
 
 You can easily use @:scope@ to let @acts_as_category@ respect that.
 
 <pre>
-  ScopedCategory.roots.first.siblings
+  ScopedCategory.roots.first.siblings        # Returns the siblings, which correspond to the same @Catalogue@.
 </pre>
-
-Will thus only return the siblings, which correspond to the same @Catalogue@.
 
 <pre>
-  Catalogue.first.scoped_categories.roots
+  Catalogue.first.scoped_categories.roots    # Can be used to find all visible roots for this user.
 </pre>
-
-Can be used to find all visible roots for this user.
 
 <pre>
-  Catalogue.first.scoped_categories.create!
+  Catalogue.first.scoped_categories.create!  # Will create a category root in the scope of that Catalogue.
 </pre>
 
-Will create a category root in the scope of that Catalogue. You get the idea. Please notice, that it is assumed that every tree is in one scope anyway! So @children@ has nothing to do with scope, it simply returns the children.
+You get the idea. Please notice, that it is assumed that every tree is in one scope anyway! So @children@ has nothing to do with scope, it simply returns the children.
 
 h2. FAQ
 
@@ -372,6 +305,8 @@ I didn't feel comfortable overwriting the find method for Categories and it is n
 Because the whole idea of hidden is to exclude descendants of an hidden Category as well, thus the ancestors of a category you can access anyway are never going to be hidden.
 
 h2. Add AJAX positioning for ordering
+
+*WARNING:* This is not tested scopes yet!
 
 Let's say you have a gallery and use acts_as_category on your categories. Then the categories will not be ordered by name (unless you want them to), but by a individual order. For this we have the position column. If the @:position@ parameter refers to a non-existent column, this feature is simply disabled.
 
