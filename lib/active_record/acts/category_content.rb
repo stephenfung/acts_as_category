@@ -27,16 +27,16 @@ module ActiveRecord
         #
         # * <tt>category</tt> - specifies the model name of the category (default: +category+)
         # * <tt>counter_cache</tt> - specifies the counter_cache to use (default: +pictures_count+)
-        def acts_as_category_content(options = {})
+        def acts_as_category_content(category="category", options = {})
     
           # Load parameters whenever acts_as_category is called
-          configuration = { :category => 'category', :counter_cache => 'pictures_count' }
+          configuration = { :counter_cache => "#{self.name.underscore}_count" }
           configuration.update(options) if options.is_a?(Hash)
           
-          belongs_to configuration[:category], :counter_cache => configuration[:counter_cache]
+          belongs_to category, configuration
           
-          validates_associated configuration[:category]
-          validates_presence_of "#{configuration[:category]}_id", :message => I18n.t('acts_as_category_content.error.no_subcategories')
+          validates_associated category
+          validates_presence_of "#{category}_id", :message => I18n.t('acts_as_category_content.error.no_subcategories')
           
           # This class_eval contains methods which cannot be added wihtout having a concrete model.
           # Say, we want these methods to use parameters like "configuration[:category]", but we
@@ -52,7 +52,7 @@ module ActiveRecord
             
             # Inheriting category permitted? method
             def permitted?
-              self.#{configuration[:category]}.permitted?
+              self.#{category}.permitted?
             end
             
             # In place version of permitted, returning self? Returns +false+ if not permitted
