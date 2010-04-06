@@ -1,5 +1,13 @@
 h1. Introduction
 
+Note that there is a development branch for Rails 3. The Unit Tests pass at least, but it would still need some refactoring.
+
+<pre>
+  Branch: 3.0-alpha
+</pre>
+
+The Master is still for Rails > 2.3.5
+
 <pre>
   acts_as_category (Version 2.0 alpha)
 </pre>
