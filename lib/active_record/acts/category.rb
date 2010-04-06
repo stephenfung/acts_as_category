@@ -56,7 +56,7 @@ module ActiveRecord
 
           # Substantial validations
           before_validation           :validate_foreign_key
-          before_validation_on_create :assign_position
+          before_validation           :assign_position, :on => :create
           validates_numericality_of   options[:foreign_key], :only_integer => true, :greater_than => 0, :allow_nil => true, :message => I18n.t('acts_as_category.error.no_descendants')
 
           # Callbacks for automatic refresh of ancestors_count & descendants_count cache columns
@@ -175,7 +175,7 @@ module ActiveRecord
             # Updating all category positions into correct 1, 2, 3 etc. per hierachy level
             #
             def self.refresh_positions(categories = nil)
-              categories = roots if categories.blank?
+              categories = roots.all if categories.blank?
               categories = [categories] unless categories.is_a? Array
               categories.each_with_index { |category, position|
                 category.update_attribute('#{options[:position]}', position + 1)
@@ -206,12 +206,12 @@ module ActiveRecord
           END
           
           # Scope out via given scope conditions for the instance
-          named_scope :scoped, lambda { |sender| { :conditions => sender.scope_condition, :order => order_by } }
+          scope :manual_scope, lambda { |sender| { :conditions => sender.scope_condition, :order => order_by } }
           
           # Scope for permitted categories
           # Does *NOT* respect inherited permissions! 
           # This is intended to be used with roots only
-          named_scope :permitted, lambda {
+          scope :permitted, lambda {
             if permissions.empty?
               { :conditions => ["#{hidden_column} IS NULL OR #{hidden_column} = ? ",false], :order => order_by }
             else
@@ -220,7 +220,7 @@ module ActiveRecord
           }
 
           # Returns all root +categories+, disregarding permissions
-          named_scope :roots!, lambda { { :conditions => { parent_id_column => nil }, :order => order_by } }
+          scope :roots!, lambda { { :conditions => { parent_id_column => nil }, :order => order_by } }
 
           # Returns all root +categories+, respecting permitted/hidden ones
           def self.roots
@@ -345,12 +345,12 @@ module ActiveRecord
 
         # Returns all siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings
-          parent ? parent.children : self.class.roots.scoped(self)
+          parent ? parent.children : self.class.roots.manual_scope(self)
         end
 
         # Returns all ids of siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings_ids
-          parent ? parent.children_ids : self.class.roots.scoped(self).map {|x| x.id}
+          parent ? parent.children_ids : self.class.roots.manual_scope(self).map {|x| x.id}
         end
         
         # Immediately refresh cache of category instance
@@ -369,23 +369,23 @@ module ActiveRecord
           # If there is a parent_id given
           unless self.read_attribute(parent_id_column).nil?
             # Parent_id must be a valid category ID
-            self.write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && !self.class.find(self.read_attribute(parent_id_column))
+            write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && !self.class.find(self.read_attribute(parent_id_column))
             # Parent must not be itself
-            self.write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.id == self.read_attribute(parent_id_column) unless self.id.blank?
+            write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.id == self.read_attribute(parent_id_column) unless self.id.blank?
             # Parent must not be a descendant of itself
-            self.write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.descendants_ids(true).include?(self.read_attribute(parent_id_column))
+            write_attribute(parent_id_column, 0) if self.read_attribute(parent_id_column) > 0 && self.descendants_ids(true).include?(self.read_attribute(parent_id_column))
           end
           rescue ActiveRecord::RecordNotFound
-          self.write_attribute(parent_id_column, 0) # Parent was not found
+          write_attribute(parent_id_column, 0) # Parent was not found
         end
         
         # Assigns a position integer after creation of a category
         def assign_position
           # Position for new nodes is (number of siblings + 1), but only for new categories
           if self.read_attribute(parent_id_column).nil?
-            self.write_attribute(position_column, self.class.roots!.size + 1)
+            write_attribute(position_column, self.class.roots!.size + 1)
           else
-            self.write_attribute(position_column, self.class.find(:all, :conditions => ["#{parent_id_column} = ?", self.read_attribute(parent_id_column)]).size + 1)
+            write_attribute(position_column, self.class.find(:all, :conditions => ["#{parent_id_column} = ?", self.read_attribute(parent_id_column)]).size + 1)
           end
         end
         

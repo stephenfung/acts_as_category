@@ -30,7 +30,8 @@ class ScopedCategory < ActiveRecord::Base
                    :children_count => 'my_children_count',
                    :ancestors_count => 'my_ancestors_count',
                    :descendants_count => 'my_descendants_count',
-                   :counts_readonly => true
+                   :counts_readonly => true,
+                   :order_by => 'my_position'
 end
 
 class ScopedCategoryTest < Test::Unit::TestCase
