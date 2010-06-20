@@ -208,7 +208,7 @@ module ActiveRecord
           END
           
           # Scope out via given scope conditions for the instance
-          named_scope :scoped, lambda { |sender| { :conditions => sender.scope_condition, :order => order_by } }
+          named_scope :manual_scope, lambda { |sender| { :conditions => sender.scope_condition, :order => order_by } }
           
           # Scope for permitted categories
           # Does *NOT* respect inherited permissions! 
@@ -347,12 +347,12 @@ module ActiveRecord
 
         # Returns all siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings
-          parent ? parent.children : self.class.roots.scoped(self)
+          parent ? parent.children : self.class.roots.manual_scope(self)
         end
 
         # Returns all ids of siblings and a reference to the current node, respecting permitted/hidden categories
         def self_and_siblings_ids
-          parent ? parent.children_ids : self.class.roots.scoped(self).map {|x| x.id}
+          parent ? parent.children_ids : self.class.roots.manual_scope(self).map {|x| x.id}
         end
         
         # Immediately refresh cache of category instance
