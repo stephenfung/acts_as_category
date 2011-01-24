@@ -1,12 +1,10 @@
-# coding:utf-8
-
 module ActiveRecord
   module Acts
     module Category
       
-      # –––––––––––
+      # -----------
       # Constructor
-      # –––––––––––
+      # -----------
       
       # This constructor is evoked when this module is included into <tt>ActiveRecord::Base</tt> by
       # <tt>vendor/plugins/acts_as_category/init.rb</tt>. That is, every time your Rails application is loaded
@@ -18,9 +16,9 @@ module ActiveRecord
         base.extend ClassMethods
       end
 
-      # –––––––––––––––––––
+      # -------------------
       # ClassMethods module
-      # –––––––––––––––––––
+      # -------------------
       
       module ClassMethods
         # Please refer to README for more information about this plugin.
@@ -98,9 +96,9 @@ module ActiveRecord
             scope_condition_method = "def scope_condition() %Q{#{options[:scope]}} end"
           end
           
-          # –––––––––––––
+          # -------------
           # Class methods
-          # –––––––––––––
+          # -------------
 
           # Returns an +array+ with +ids+ of categories, which are to be allowed to be seen,
           # though they might be flagged with the +hidden+ attribute. Returns an empty +array+ if none.
@@ -128,9 +126,9 @@ module ActiveRecord
           
           class_eval <<-END
           
-            # –––––––––––––––––––––––
+            # -----------------------
             # Generated class methods
-            # –––––––––––––––––––––––
+            # -----------------------
             
             # Define instance getter methods to keep track of the column names
             def self.parent_id_column()         %Q{#{options[:foreign_key]}}       end
@@ -185,9 +183,9 @@ module ActiveRecord
               }
             end
             
-            # ––––––––––––––––––––––––––
+            # --------------------------
             # Generated instance methods
-            # ––––––––––––––––––––––––––
+            # --------------------------
             
             # This will actually include the InstanceMethods to your model
             include ActiveRecord::Acts::Category::InstanceMethods
